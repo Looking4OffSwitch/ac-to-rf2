@@ -1178,3 +1178,83 @@ succeeds with signature-based names. Resolved modes are opaque, blend, cutout,
 cutout respectively; grass/bush thresholds remain 26/178 remapped to 191.
 The new CI workflow runs the fixture suite on Windows/Python 3.10 and 3.14;
 Blender is optional there. CI results are separate from the local measurements.
+
+## 2026-10-31: working portable Blender 5.0 conversion route
+
+This supersedes the previous tooling blocker for conversion. Blender 5.2 remains
+installed, but the tested export pair is portable Blender 5.0.1 (Python 3.11.13)
+and the rFactor2 IO Group community exporter R25.11.27 (io_rfactor2_gmt).
+Both import and addon registration succeed. The project now accepts Blender
+5.0+, preferring the tested portable pair; 5.2 still needs a compatible exporter.
+
+ac2rf2-tools downloads the official portable ZIP plus the author's exporter ZIP
+into ignored .tools/, verifies pinned SHA256 checksums, and prepares a project-
+local add-on path. It does not change the system Blender installation. Blender
+archive SHA256 (also checked against the official release manifest):
+921d77f6c505a35b2c2f6e67d4ad1c10b72418338ba0e0d3ea7f582a5e5fe46e.
+Exporter archive SHA256:
+295b676408c607b4c6cfc7f0fa8b5ce573c0a6fcdfc3151bc1c2ac6afa2877d7.
+
+### Actual exporter interface, measured before a complete build
+
+A first four-material export failed at the old template-parent check: the newer
+add-on exposes File_Name as RNA and the parent has no custom ID keys. A direct
+probe also showed its default material has Shader_Name='Invalid'. Therefore the
+converter now explicitly creates L2DIFFUSET0 as its plain shader template and
+sets File_Name, Normals, material colours, specular power and Fresnel values
+through their actual RNA properties. Mesh Normals is the enum string '0'
+(Smooth/custom), with '1'=Face and '2'=Up; writing a custom key is insufficient.
+
+Five GMTs from a targeted Laguna export completed: asphalt, gravel_brd,
+BBbushes, and both chunks of the selected BBgrass mesh. Read back from those
+files, the gravel border has blend factors 5/6 and material flags 0x68902023;
+opaque asphalt/cutouts have 2/1 and 0x68902003. Source/destination factors are
+the two uint32s at shader-name offsets -16/-12. Foliage diffuse textures have
+colour-key flags 0x88 and alpha reference 191. Material values also arrive:
+gravel_brd ambient .8171428/diffuse .6809524; bush .6285714/.5238096; grass
+.1571429/.1309524. These are binary checks, not a claim about the rendered look.
+
+A new real-exporter regression test uses generated geometry and three materials.
+It reads back ambient .2, diffuse .4, factors 2/1 (opaque/cutout) or 5/6 (blend),
+and cutout reference 191 with colour key set. It also verifies a custom diagonal
+normal distinct from both the face normal and constant up. Blender's packed
+custom-normal round trip showed about 4e-5 error, so the test uses a 1e-4
+component tolerance. All 25 local regression tests pass, including actual
+Blender 5.0 GMT serialization and the separate 5.2 geometry smoke test.
+
+The community exporter is a third-party add-on, not a Blender or Studio 397
+component. Its compiled Python version constrains which Blender can run it;
+this is why installing an arbitrary newer Blender alone does not solve export.
+
+### Full stock Laguna Seca build and staged verification
+
+A complete --jobs 4 build of the installed stock ks_laguna_seca completed all
+seven stages with the portable pair. It ran from an ignored frozen source copy
+(out/_runtime_source) to avoid changing modules during the build. Source scan:
+1603 meshes, 244 physical meshes, 122 material definitions, 17 surface blocks,
+216 embedded textures. Texture conversion reported 23 converted, zero failed.
+The staged location contains 1124 GMTs (247 collidable), 275 textures, 592 AI
+waypoints over 3553.2 m, 24 grid/pit positions, and 41 cameras.
+
+ac2rf2-verify against the staged location returned zero (all checks passed):
+- 1124 GMTs checked and zero missing textures.
+- 196 alpha-tested GMTs checked: zero wrong thresholds, zero missing colour key,
+  zero alpha-tested materials on shaders that cannot test alpha.
+- 157 upright meshes checked: zero lit as though all normals point straight up.
+- Zero GMTs retaining the exporter's default 1000 m draw range; 723 shadow casters.
+- Export contracts, required location files, timing strips and hidden export
+  checks passed. Of 806 source meshes marked hidden, 247 hidden instances were
+  exported; non-rendered, non-collidable meshes are deliberately omitted.
+
+One declared-surface warning remains: physical mesh RDGRAVEL008 matches no AC
+surface key and uses the documented plain-road fallback. No track-specific
+exception was added. The staged output is under
+out/_runtime_source/out/ks_laguna_seca/rf2/ks_laguna_seca and was NOT installed
+over the game's Developer Mode location. No game assets are committed.
+
+Setup checks pass for Python 3.14.7, NumPy 2.5.4, both Steam game paths, Blender
+5.0.1 and exporter R25.11.27; pip check finds no broken requirements. These
+measurements validate serialized files, not the rendered appearance. A fixed
+camera/time/weather comparison in rF2 against AC+CSP is still required for the
+near-car road band and any remaining lighting or texture defects. See
+docs/VALIDATION.md for the concrete next steps.

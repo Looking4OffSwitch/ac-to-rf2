@@ -15,11 +15,12 @@ dev = ["pytest>=8,<10"]
 
 [project.scripts]
 ac2rf2 = "build_track:main"
+ac2rf2-tools = "setup_tools:main"
 ac2rf2-check = "check_setup:main"
 ac2rf2-verify = "verify_install:main"
 
 [tool.setuptools]
-py-modules = ["backdrop", "bake_layers", "blender_stage", "build_track",
+py-modules = ["blender_paths", "setup_tools", "backdrop", "bake_layers", "blender_stage", "build_track",
   "check_setup", "convert_track", "finalize_track", "fix_textures", "kn5",
   "make_aiw", "make_cam", "parallel", "scene_contract", "steam_paths",
   "terrain", "material_policy", "install_location", "exporter_support", "verify_install"]

@@ -91,7 +91,7 @@ def check_track(rep, track_dir, layout):
 def check_blender(rep, blender):
     if not os.path.isfile(blender):
         rep.problem("Blender not found at %s" % blender,
-                    "Install Blender 5.2 LTS or newer, or pass --blender \"<path to blender.exe>\"")
+                    "Run ac2rf2-tools, or pass --blender \"<path to blender.exe>\"")
         return
     try:
         r = subprocess.run([blender, "--background", "--factory-startup",

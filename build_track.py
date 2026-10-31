@@ -20,10 +20,11 @@ import argparse
 import subprocess
 
 from parallel import default_jobs
+from blender_paths import default_blender
 from scene_contract import validate_exports
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-BLENDER = r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
+BLENDER = default_blender()
 
 
 def step(n, title):

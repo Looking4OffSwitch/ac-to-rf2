@@ -279,10 +279,10 @@ def test_mapping_joins_duplicate_nodes_and_surface_variants_end_to_end(tmp_path,
 def test_exporter_loader_rejects_older_blender_and_missing_addon(monkeypatch):
     import sys
     import exporter_support
-    app = SimpleNamespace(version=(5, 1, 0), version_string="5.1.0")
+    app = SimpleNamespace(version=(4, 5, 0), version_string="4.5.0")
     monkeypatch.setitem(sys.modules, "bpy", SimpleNamespace(app=app))
     monkeypatch.setitem(sys.modules, "addon_utils", SimpleNamespace(enable=lambda *a, **k: None))
-    with pytest.raises(RuntimeError, match="5.2 or newer"):
+    with pytest.raises(RuntimeError, match="5.0 or newer"):
         exporter_support.enable_exporter()
     app.version, app.version_string = (5, 2, 3), "5.2.3"
     with pytest.raises(RuntimeError, match="No compatible rF2 GMT exporter"):

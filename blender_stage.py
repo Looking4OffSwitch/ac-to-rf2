@@ -86,11 +86,16 @@ def make_template():
         raise RuntimeError("addon did not create a template object with a material")
     ob = obs[-1]
     empty = ob.parent
-    if empty is None or "File_Name" not in empty.keys():
+    if empty is None or not hasattr(empty, "File_Name"):
         raise RuntimeError("template mesh has no rF2 empty parent")
     # Must come off the object, not bpy.data.materials[0], which is Blender's
     # default grease pencil material and carries none of the rF2 properties.
     mat = ob.data.materials[0]
+    import importlib
+    nodes_mod = importlib.import_module(ADDON + ".rF2_Nodes_Stuff")
+    mat, ob = nodes_mod.CreateNodeTree(mat, ob, "DIFFUSE", "L2DIFFUSET0")
+    if mat.node_tree.nodes.get("sTex0") is None:
+        raise RuntimeError("exporter did not prepare the plain diffuse shader")
     coll = bpy.data.collections.get("GMTs") or bpy.context.collection
     print("template empty %s, mesh %s, material %s, collection %s"
           % (empty.name, ob.name, mat.name, coll.name))
@@ -355,7 +360,7 @@ def build_mesh(geom, matrix, name, material, template_empty, template_ob, coll,
     # and no upright surface had any shading at all -- the walls, seats and
     # white trucks that kept coming out too bright however their material
     # was turned down. 0 writes each vertex's real normal.
-    me["Normals"] = 0
+    me.Normals = "0"
     me.materials.clear()
     me.materials.append(material)
     me.name = name + "_Mesh"
@@ -364,7 +369,7 @@ def build_mesh(geom, matrix, name, material, template_empty, template_ob, coll,
     # exporter writes the file as, and the mesh hangs underneath it.
     empty = template_empty.copy()
     empty.name = name
-    empty["File_Name"] = name
+    empty.File_Name = name
     coll.objects.link(empty)
     empty.matrix_world = Matrix.Identity(4)
     empty.rFactor = "2B"
@@ -793,17 +798,17 @@ def main():
         fd, fa = min(1.0, fd), min(1.0, fa)
         # The racing line rubber takes AC's own coefficient, untouched: 0.130
         # for Groove, as signed off. It is the non-native branch below.
-        mat["Diffuse_Color"] = ([fd] * 3 + [1.0]) if native else             [min(d * gain, 1.0)] * 3 + [1.0]
-        mat["Ambient_Color"] = ([fa] * 3 + [1.0]) if native else             [min(a, 1.0)] * 3 + [1.0]
-        mat["Specular_Color"] = [min(spec, 1.0)] * 3 + [1.0]
-        mat["Specular_Power"] = max(1, int(round(exp)))
+        mat.Diffuse_Color = ([fd] * 3 + [1.0]) if native else             [min(d * gain, 1.0)] * 3 + [1.0]
+        mat.Ambient_Color = ([fa] * 3 + [1.0]) if native else             [min(a, 1.0)] * 3 + [1.0]
+        mat.Specular_Color = [min(spec, 1.0)] * 3 + [1.0]
+        mat.Specular_Power = max(1, int(round(exp)))
         # Grazing angle sheen. The template leaves a 4x boost on everything;
         # AC asks for it on 43 materials and for none at all on the rest, and
         # the road it asks for most -- which is a surface you almost only ever
         # see at a grazing angle.
-        mat["FresSpecMin"] = float(pr.get("fresnelC", 0.0))
-        mat["FresSpecExp"] = float(pr.get("fresnelEXP", 0.0)) or 1.0
-        mat["FresSpecMax"] = float(pr.get("fresnelMaxLevel", 0.0))
+        mat.FresSpecMin = float(pr.get("fresnelC", 0.0))
+        mat.FresSpecExp = float(pr.get("fresnelEXP", 0.0)) or 1.0
+        mat.FresSpecMax = float(pr.get("fresnelMaxLevel", 0.0))
         # All 75 materials in Joesville and Loch Drummond carry this, race
         # surface and opaque barriers included, so whatever the addon's "Car
         # Body" label means it is simply part of a normal track export. It is
@@ -865,7 +870,7 @@ def main():
                 try:
                     node.Alpha_Reference = alpha_ref[name]
                 except Exception:
-                    node["Alpha_Reference"] = alpha_ref[name]
+                    raise RuntimeError("exporter lacks Alpha_Reference RNA property")
                 # The threshold on its own does nothing. Colour keying is what
                 # makes rF2 apply it, and it is set on exactly 18 texture
                 # entries across both official tracks -- every one of them a

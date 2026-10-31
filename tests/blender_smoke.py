@@ -12,6 +12,8 @@ assert bpy.app.version >= (5, 2, 0), bpy.app.version_string
 # Supply only the add-on's object tag; all geometry/normals/UV operations below
 # use Blender's real API. This smoke test does not claim to export a GMT.
 bpy.types.Object.rFactor = bpy.props.StringProperty()
+bpy.types.Object.File_Name = bpy.props.StringProperty()
+bpy.types.Mesh.Normals = bpy.props.EnumProperty(items=[("0", "Smooth", "")])
 bpy.ops.mesh.primitive_cube_add()
 template = bpy.context.object
 material = bpy.data.materials.new("smoke")

@@ -13,10 +13,12 @@ Requested 2026-10-31. Tracked here because GitHub Issues is disabled on the fork
 
 ## Obtain a GMT exporter compatible with Blender 5.2
 
-The vendor's Blender 5.0 distribution was checked on 2026-10-31. Its `.pyc`
+The rFactor2 IO Group's Blender 5.0 distribution was checked on 2026-10-31. Its `.pyc`
 magic is `a70d0d0a` (Python 3.11), while Blender 5.2.3 embeds Python 3.13.
-An updated compiled distribution or source release is needed. The local
-Blender 5.2 geometry smoke test passes; end-to-end GMT export and the material
-adapter still need verification against that compatible exporter. Do not
+An updated compiled distribution or source release is needed for 5.2 export.
+The working conversion route now uses portable Blender 5.0.1 with the matching
+community add-on R25.11.27, prepared by ac2rf2-tools. Real GMT regression tests
+verify material colours, blend factors, alpha testing, and authored normals.
+The separate Blender 5.2 geometry smoke test also passes. Do not
 claim visual defects or the near-car road band resolved until in-game checks
 pass. The converter now diagnoses this dependency during setup.

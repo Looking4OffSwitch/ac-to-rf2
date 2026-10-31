@@ -35,7 +35,7 @@ per-track hacks. It has been tested on Silverstone, Spa, Laguna Seca and Highlan
 | [rFactor 2](https://store.steampowered.com/app/365960/rFactor_2/) | current Steam build | Steam. Includes ModDev and `texconv.exe`; the GMT exporter is separate |
 | [Python](https://www.python.org/downloads/windows/) | 3.10 or newer | python.org. Tick **"Add python.exe to PATH"** in the installer |
 | [NumPy](https://numpy.org/install/) | 1.24 or newer | Installed by `python -m pip install -e .` |
-| [Blender](https://www.blender.org/releases/5-2/) | **5.2 LTS or newer** | blender.org release archive. The GMT exporter must also support the Python bundled with your Blender; see the compatibility note below |
+| [Blender](https://download.blender.org/release/Blender5.0/) | **5.0.1 tested** | `ac2rf2-tools` installs a portable copy alongside any system Blender |
 | rF2 GMT exporter add-on (`io_rfactor2_gmt`) | Compatible build required | **Separate download, not included with rF2:** Studio-397 forum thread [Blender rFactor2 Export Scripts](https://forum.studio-397.com/index.php?threads/blender-rfactor2-export-scripts.74821/) |
 | `texconv.exe` | ships with rF2 | `rFactor 2\Support\Tools\MapConverter\texconv.exe` |
 | [Custom Shaders Patch](https://acstuff.club/patch/) | optional | acstuff.club. Used only for its per-track config (material tweaks, GrassFX) when installed |
@@ -54,14 +54,12 @@ python steam_paths.py
 If a game is somewhere Steam doesn't list, give its folder to `build_track.py`
 with `--rf2 "<rFactor 2 folder>"` or `--ac "<assettocorsa folder>"`.
 
-**Blender** is expected at its default location:
-
-```
-C:\Program Files\Blender Foundation\Blender 5.2\blender.exe
-```
+**Blender** is selected from the project's portable 5.0.1 copy in `.tools/`,
+then a system Blender 5.0 or 5.2 installation. `ac2rf2-tools` prepares the
+portable version without changing an existing Blender installation.
 
 If yours is elsewhere, pass `--blender "<path to blender.exe>"` to
-`build_track.py`, or edit `BLENDER` at the top of that file.
+`build_track.py`, or set `AC2RF2_BLENDER` to its executable.
 
 Only Python needs to be in PATH. Blender and `texconv.exe` are called by their
 full paths.
@@ -70,49 +68,35 @@ full paths.
 
 ## Exporter compatibility
 
-Blender 5.2 is the target. The vendor's current "Blender 5.0 plus" exporter
-archive contains Python 3.11 bytecode; Blender 5.2.3 bundles Python 3.13 and
-rejects it with "bad magic number". A source distribution or an exporter built
-for Blender 5.2 is required for geometry export. `ac2rf2-check` detects this
-before a conversion. Installing Blender alone does not supply the exporter.
-Python regression tests and the non-Blender stages run independently.
+The tested pair is **Blender 5.0.1** and the **rFactor2 IO Group community
+exporter R25.11.27**. `ac2rf2-tools` downloads both into ignored `.tools/` and
+checks their SHA256 hashes. Neither tool is included in this repository.
+
+Blender 5.2 can remain installed for other work. Its Python 3.13 cannot load
+this exporter's Python 3.11 compiled files, so conversion uses the portable
+5.0.1 copy. Supporting 5.2 for export needs updated community add-on binaries
+or source; the converter's geometry API alone already passes a 5.2 smoke test.
 
 ## Setup
 
-1. **Create and activate a Python environment.** In this repository, open a
-   Command Prompt and run:
-   ```bat
-   python -m venv .venv
-   .venv\Scripts\activate.bat
-   python -m pip install -e ".[dev]"
-   ```
-   Activate the environment in each new terminal. Installed commands include
-   `ac2rf2`, `ac2rf2-check`, and `ac2rf2-verify`; `pytest` runs the regression
-   suite. The existing `python build_track.py` commands continue to work.
-   Documentation restructuring is tracked in [WORK_ITEMS.md](WORK_ITEMS.md).
-2. **Install Blender 5.2 LTS or newer** to its default folder.
-3. **Install the rF2 exporter add-on in Blender**
-   1. Obtain a Blender 5.2-compatible add-on zip or source release from the Studio-397
-      forum thread
-      [Blender rFactor2 Export Scripts](https://forum.studio-397.com/index.php?threads/blender-rfactor2-export-scripts.74821/).
-      Don't unzip it.
-   2. Start Blender, open *Edit > Preferences > Add-ons*, click **Install...**
-      and pick the zip.
+In a Command Prompt opened in this repository:
 
-   The converter enables a compatible add-on on each run; setup verifies it first.
-4. **Get the code.** Either click **Code > Download ZIP** on the GitHub page and
-   extract it anywhere, get it on the releases page or with git:
-   ```
-   git clone https://github.com/Mewzapchu/ac-to-rf2.git
-   ```
-5. **Check the setup.** In the converter's folder, run:
-   ```
-   python check_setup.py
-   ```
-   It lists each requirement as `ok`, or as `PROBLEM` with what to do about it,
-   and ends with `all good` when everything is in place. Every conversion runs
-   the same check first, so a missing piece stops it within seconds instead of
-   minutes into a build.
+```bat
+python -m venv .venv
+.venv\Scripts\activate.bat
+python -m pip install -e ".[dev]"
+ac2rf2-tools
+ac2rf2-check
+```
+
+Activate `.venv` in each new terminal. `ac2rf2`, `ac2rf2-check`, and
+`ac2rf2-verify` are installed project commands; `pytest` runs regression tests.
+The existing `python build_track.py` commands continue to work.
+
+The next step is `ac2rf2 "<AC track folder>" --install auto`, adding `--layout`
+where needed. See [validation steps](docs/VALIDATION.md) for the export probes
+and in-game comparison. The larger README reduction remains tracked in
+[WORK_ITEMS.md](WORK_ITEMS.md).
 
 ---
 
