@@ -1,0 +1,21 @@
+name: Python regression tests
+
+on: [push, pull_request]
+
+jobs:
+  tests:
+    runs-on: windows-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.14"]
+    defaults:
+      run:
+        shell: cmd
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m venv .venv
+      - run: call .venv\Scripts\activate.bat && python -m pip install -e ".[dev]"
+      - run: call .venv\Scripts\activate.bat && pytest -q

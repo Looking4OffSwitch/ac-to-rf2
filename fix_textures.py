@@ -83,7 +83,7 @@ def main():
     args = ap.parse_args()
 
     tex_dir = os.path.abspath(args.tex_dir)
-    tmp = os.path.join(os.path.dirname(tex_dir.rstrip("\/")), "_converted")
+    tmp = os.path.join(os.path.dirname(tex_dir.rstrip("\\/")), "_converted")
     os.makedirs(tmp, exist_ok=True)
 
     todo = []
@@ -159,6 +159,8 @@ def main():
 
     shutil.rmtree(tmp, ignore_errors=True)
     print("converted %d, failed %d" % (converted, failed))
+    if failed:
+        raise SystemExit("texture conversion failed for %d file(s)" % failed)
 
 
 if __name__ == "__main__":

@@ -17,6 +17,8 @@ import os
 import json
 import shutil
 import argparse
+from scene_contract import index_meshes, mesh_key, validate_exports
+from install_location import install_location
 
 SCN_HEADER = """CUBEASF
 // {layout}, converted from Assetto Corsa
@@ -94,7 +96,7 @@ GDB = """{layout}
   Location = converted from Assetto Corsa
   Length = {km:.3f} KM / {mi:.2f} Miles
   TrackType = Road Course
-  TerrainDataFile = ..\{venue}.tdf
+  TerrainDataFile = ..\\{venue}.tdf
   HeadlightsRequired = false
   FormationAndStart = 0
   GarageDepth = 3.5
@@ -204,9 +206,10 @@ def main():
     if os.path.exists(mapping):
         mdata = json.load(open(mapping))
         cutouts = mdata.get("alpha_ref", {})
-        flags = {m["mesh"]: m for m in mdata["meshes"]}
+        validate_exports(mdata, exported, gmt_dir)
+        flags = index_meshes(mdata["meshes"])
         for row in exported:
-            cur = flags.get(row.get("mesh"))
+            cur = flags.get(mesh_key(row))
             if cur is not None:
                 row["render"] = cur.get("render", True)
                 row["shadow"] = shadow_caster(cur, cutouts)
@@ -345,14 +348,15 @@ def main():
 
     if args.install:
         dest = os.path.join(args.install, venue)
+        import verify_install
+        if verify_install.verify(stage, out_dir):
+            raise SystemExit("refusing to install: staged location failed verification")
         try:
-            if os.path.isdir(dest):
-                shutil.rmtree(dest)
-            shutil.copytree(stage, dest)
-            print("installed -> %s" % dest)
-        except PermissionError as exc:
-            print("could not install (needs elevation): %s" % exc)
-            print("copy this folder there by hand: %s" % stage)
+            install_location(stage, dest)
+        except OSError as exc:
+            raise SystemExit("could not install: %s; staged copy: %s" % (exc, stage))
+        print("installed -> %s" % dest)
+
 
 
 def write(path, text):

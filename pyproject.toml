@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ac-to-rf2"
+version = "0.1.0"
+description = "Convert Assetto Corsa tracks to rFactor 2 Developer Mode locations"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24,<3"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10"]
+
+[project.scripts]
+ac2rf2 = "build_track:main"
+ac2rf2-check = "check_setup:main"
+ac2rf2-verify = "verify_install:main"
+
+[tool.setuptools]
+py-modules = ["backdrop", "bake_layers", "blender_stage", "build_track",
+  "check_setup", "convert_track", "finalize_track", "fix_textures", "kn5",
+  "make_aiw", "make_cam", "parallel", "scene_contract", "steam_paths",
+  "terrain", "material_policy", "install_location", "exporter_support", "verify_install"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

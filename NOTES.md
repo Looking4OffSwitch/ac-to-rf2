@@ -1059,3 +1059,122 @@ cameras 0.5 min, Blender 9 min (70%), finalize 1 s.
   lower case; realpath gives the real case), so a Steam installed off
   C:\Program Files (x86) is found. --rf2 / --ac (AC2RF2_RF2_DIR /
   AC2RF2_AC_DIR) name a game folder outright.
+
+## 2026-10-31: technical review fixes and Blender 5.2 migration
+
+### Measurements before the changes
+
+- All 170 installed stock KN5 files use version 6. 49 files across Barcelona,
+  Brands Hatch, Nordschleife and Red Bull Ring have a nonzero extra header
+  integer. Barcelona 1.kn5 stores 912125, Brands Hatch 1.kn5 781233, and
+  Nordschleife 2.kn5 673425. The old reader and both texture scanners treated
+  these values as payload lengths and failed with out-of-bounds reads.
+  AcTools consumes the integer only, then reads the texture count:
+  https://github.com/gro-ove/actools/blob/master/AcTools/Kn5File/Kn5Basic.cs
+- Names are not identities. Laguna has two bushesO nodes with tree_set_1 and
+  BBbushes materials. Spa has two D nodes with metals1 and trees2. Spa also
+  declares asph_pitlane_old (plain shader) and asph-pitlane-old (multilayer),
+  which sanitized to the same material name. 99 rendered Laguna rows differed
+  from the first definition selected for their shared rF2 material name.
+- Laguna merged ROAD (.970), ASPHNEW (.990), RDOLD (.940), PITS (.965) and
+  other surfaces into road_PHYSICS. The generated road block used .965 for
+  all of them. SAND and GRAVEL also shared one material and grip block.
+- A valid skinned-node fixture failed because flags precede the bone table,
+  and skinned nodes have no static-mesh bounding-sphere/renderable tail.
+- A verifier fixture containing one correct cutout, another bound to the
+  wrong texture, and a missing scene GMT returned zero and "all checks
+  passed". A failed texture-conversion subprocess likewise returned zero.
+  An installation copy failure deleted the previous venue and returned
+  normally. These cases are now reproducible regression tests.
+- A targeted bake of Laguna gravel_brd classifies its texture as a gradient,
+  while the source row is alpha_test=True and needs_blend=True. The exporter
+  previously excluded that row from both cutout and blend paths.
+
+### Changes and measurements after the changes
+
+The v6 integer is now consumed without skipping data in all three readers.
+All 170 installed stock KN5 files now parse to exactly their file size,
+including all 49 nonzero-header files. Synthetic skinned fixtures also leave
+following sibling nodes aligned and retain their vertex normals.
+
+Mapping schema 2 identifies a mesh by model/traversal ordinal, and a material
+by its complete declared definition. Sanitization is followed by a stable
+signature; physical materials additionally carry a distinct AC surface
+prefix. Geometry measurement tables, baked albedo sampling, export records,
+scene joins and verification use these identities too. Old geometry must be
+rebuilt; --skip-geometry rejects records without the new chunk manifest.
+
+Fresh mapping runs against the installed stock assets produced:
+
+| track | unique mesh IDs | distinct rF2 materials | physical surface blocks |
+|---|---:|---:|---:|
+| Laguna | 1603 | 122 | 17 |
+| Silverstone GP | 1959 | 92 | 16 |
+| Spa | 1728 | 116 | 21 |
+
+Every generated material name mapped to exactly one source definition and
+surface prefix. Every physical surface prefix had exactly one matching TDF
+block. Blocks clone the native surface behavior and retain each AC key's own
+friction and track validity. In particular ROAD=.970, ASPHNEW=.990 and
+RDOLD=.940 remain separate. No converted content is committed.
+
+Geometry exports now record the chunk index/count and source identity, reject
+missing/truncated files and duplicate names, and fail the build on an export
+exception. Parent and finalization stages check the complete manifest before
+staging. Verification checks scene references, all expected cutouts, timing
+records, and required GDB/AIW/TDF files. Installation copies to a sibling first
+and rolls back if publication fails; copy/publication failures are tested.
+
+Rendering policy now distinguishes opaque, cutout and blended materials using
+the bake's resolved classification. Zero coefficients remain zero. CSP's
+ksSpecular overrides and LIGHTING/SPECULAR_MULT are retained (measured Laguna
+multiplier .15, Silverstone/Spa 1.0). These are semantic corrections, not new
+brightness or detail-density tuning. The near-car road band is still open.
+
+### Important correction: exporter blend enums are not zero-based
+
+The old code's 4/5 assumption was itself wrong for the current vendor release.
+Read with xdis from the vendor's Blender 5.0 archive: InitCustomProperties
+registers d3dBlendArray as Zero='1', One='2', Src Alpha='5', Inv Src Alpha='6'.
+Put_rF2_Materials reads the RNA Blend_Source_List/Blend_Destination_List
+attributes. BlendUpdate also copies the Blend Boolean to Flag_0x00000020.
+The adapter now enables/disables Blend through RNA, then resolves factors by
+the RNA enum labels rather than guessing numeric IDs or writing ignored custom
+keys. Cutouts use One/Zero; gradients use Src Alpha/Inv Src Alpha. Adapter
+policy is regression tested; resulting GMT bytes need the compatible exporter
+and an in-game check described below.
+
+### Blender 5.2, Python configuration, and remaining validation limit
+
+The project now targets Blender 5.2 or newer and uses its custom-normal API
+without the removed use_auto_smooth property. A real headless Blender 5.2.3
+smoke test builds a mesh and checks its authored custom normals, four UV sets,
+scaled detail UVs, and extended draw range, without an exporter add-on.
+
+The installed Blender 5.2.3 embeds Python 3.13.13. The author's current
+"Blender 5.0 plus" release (R25.11.27), linked from the updated forum post,
+contains Python 3.11 .pyc files (magic a70d0d0a); importing it in 5.2.3 was
+measured to fail with ImportError: bad magic number. The previous 3.6 exporter
+was also bytecode-only, for Python 3.10. Source or a Python 3.13 build is
+required; renaming the bytecode is not a compatibility fix. The archive was
+examined locally under ignored out/_tools and is not redistributed.
+https://forum.studio-397.com/index.php?threads/blender-rfactor2-export-scripts.74821/
+
+Setup now reports this exact dependency failure before a build. Full GMT
+export, serialized material behavior, driving tests, and resolution of the
+near-car band have NOT been verified with Blender 5.2. The compatible-exporter
+follow-up and requested README reduction are tracked in WORK_ITEMS.md (the
+fork has GitHub Issues disabled).
+
+A standard .venv and pyproject.toml provide NumPy as a runtime dependency,
+pytest as a development extra, and executable ac2rf2/ac2rf2-check/ac2rf2-verify
+commands after Command Prompt activation and pip install -e ".[dev]".
+The regression suite uses generated fixtures, not redistributed game assets.
+
+Final local validation: 22 regression tests pass, including the real Blender
+5.2.3 geometry smoke test. pip check reports no broken requirements. A fresh
+1024-cap Laguna bake (asphalt_norm, gravel_brd, BBgrass, BBbushes; jobs=2)
+succeeds with signature-based names. Resolved modes are opaque, blend, cutout,
+cutout respectively; grass/bush thresholds remain 26/178 remapped to 191.
+The new CI workflow runs the fixture suite on Windows/Python 3.10 and 3.14;
+Blender is optional there. CI results are separate from the local measurements.

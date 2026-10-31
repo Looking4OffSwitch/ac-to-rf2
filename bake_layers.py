@@ -1368,7 +1368,7 @@ def main():
         # A wall that uses one bright corner of a big atlas averages dark
         # over the whole atlas and was never corrected; this measures the
         # part that is actually drawn.
-        uvs = (data.get("uv_samples") or {}).get(m["ac_material"])
+        uvs = (data.get("uv_samples") or {}).get(m.get("material_id", m["ac_material"]))
         if uvs:
             hh, ww = rgb.shape[:2]
             uv = np.asarray(uvs, dtype=float)
@@ -1494,6 +1494,9 @@ def main():
             print("   %-28s x%.2f  (albedo %s)" % (k[:28], scale, lums.get(k)))
     data["no_alpha_test"] = sorted(k for k, v in refs.items() if v is None)
     data["gradients"] = sorted(k for k, v in refs.items() if v == GRADIENT)
+    from material_policy import opacity_mode
+    for row in data["meshes"]:
+        row["opacity_mode"] = opacity_mode(row, data)
     print("alpha tests: %d hard cut-outs at %d, alpha remapped from AC's own "
           "threshold, mips holding coverage; %d gradients drawn whole, %d not "
           "masks and drawn whole" % (len(data["alpha_ref"]), CUTOUT_REF,

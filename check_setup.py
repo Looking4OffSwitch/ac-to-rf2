@@ -19,15 +19,18 @@ MIN_FREE_GB = 10
 
 # Ask Blender itself rather than guessing where its add-ons live (installed
 # and portable Blenders keep them in different places). Enabling it also
-# proves this Blender can load it: it ships compiled for Python 3.10, which
-# Blender 4.1 and later no longer use.
+# tests whether the exporter's Python bytecode matches this Blender.
 PROBE = (
-    "import sys, bpy, addon_utils\n"
+    "import sys, bpy\n"
+    "sys.path.insert(0, %r)\n"
     "print('AC2RF2 VERSION', bpy.app.version_string)\n"
-    "m = addon_utils.enable(%r, default_set=False)\n"
-    "v = m.bl_info.get('version') if m else None\n"
-    "print('AC2RF2 ADDON', '.'.join(map(str, v)) if v else ('ok' if m else 'missing'))\n"
-    "sys.stdout.flush()\n" % ADDON
+    "from exporter_support import enable_exporter\n"
+    "try:\n"
+    "    name, m = enable_exporter()\n"
+    "    print('AC2RF2 ADDON', name, m.bl_info.get('version'))\n"
+    "except Exception as exc:\n"
+    "    print('AC2RF2 ERROR', str(exc))\n"
+    "sys.stdout.flush()\n" % HERE
 )
 
 
@@ -88,7 +91,7 @@ def check_track(rep, track_dir, layout):
 def check_blender(rep, blender):
     if not os.path.isfile(blender):
         rep.problem("Blender not found at %s" % blender,
-                    "Install Blender 3.6 LTS, or pass --blender \"<path to blender.exe>\"")
+                    "Install Blender 5.2 LTS or newer, or pass --blender \"<path to blender.exe>\"")
         return
     try:
         r = subprocess.run([blender, "--background", "--factory-startup",
@@ -109,17 +112,14 @@ def check_blender(rep, blender):
                     "Its output ended with:\n" + "\n".join(out.splitlines()[-5:]))
         return
     rep.ok("Blender %s" % version)
-    if not version.startswith("3.6"):
-        rep.note("the converter is tested with Blender 3.6 LTS only; "
-                 "the rF2 add-on supports 3.3 to 3.6")
-    addon = found.get("ADDON", "missing")
-    if addon == "missing":
-        rep.problem("the rF2 add-on (%s) is not installed in this Blender" % ADDON,
-                    "Download it from the Studio-397 forum, thread \"Blender rFactor2 "
-                    "Export Scripts\":\n%s\nThen in Blender: Edit > Preferences > "
-                    "Add-ons > Install..., and pick the downloaded zip." % ADDON_PAGE)
+    if found.get("ERROR"):
+        rep.problem(found["ERROR"], ADDON_PAGE)
+    elif found.get("ADDON"):
+        rep.ok("rF2 exporter " + found["ADDON"])
     else:
-        rep.ok("rF2 add-on %s" % addon)
+        rep.problem("the rF2 exporter did not complete its compatibility check",
+                    "Its output ended with:\n" + "\n".join(out.splitlines()[-8:]))
+
 
 
 def check(track_dir=None, layout=None, blender=None, install=None,

@@ -18,9 +18,12 @@ import struct
 from collections import OrderedDict, defaultdict
 
 from kn5 import KN5
+from terrain import surface_tdf
+from scene_contract import (SCHEMA_VERSION, MaterialNames, model_meshes, mesh_key,
+                            material_signature, surface_prefix)
 
-# AC surface key -> rF2 TDF material prefix. The rF2 terrain definition matches
-# the FIRST PART of a material name, so the prefix is what selects the surface.
+# AC surface key -> native rF2 behavior to clone. Each declared AC surface
+# receives its own generated material/TDF prefix (scene_contract.surface_prefix).
 SURFACE_MAP = {
     "ROAD": "road",
     "KERB": "rmbl",
@@ -66,7 +69,7 @@ def texture_alpha_stats(kn5_paths):
         ver = struct.unpack_from("<I", d, p)[0]
         p += 4
         if ver > 5:
-            p += 4 + struct.unpack_from("<I", d, p)[0]
+            p += 4
         count = struct.unpack_from("<I", d, p)[0]
         p += 4
         for _ in range(count):
@@ -310,14 +313,14 @@ def drop_coplanar_duplicates(rows, points, gap=0.01):
 
     live = [r for r in rows
             if r.get("render", True) and not r.get("lod_of")
-            and points.get(r["mesh"]) and not has_lod_range(r)]
+            and points.get(mesh_key(r)) and not has_lod_range(r)]
     arr, grid, box = {}, {}, {}
     for row in live:
-        p_ = np.asarray(points[row["mesh"]], dtype=float)
-        arr[row["mesh"]] = p_
-        grid[row["mesh"]] = set(zip((p_[:, 0] // cell).astype(int).tolist(),
+        p_ = np.asarray(points[mesh_key(row)], dtype=float)
+        arr[mesh_key(row)] = p_
+        grid[mesh_key(row)] = set(zip((p_[:, 0] // cell).astype(int).tolist(),
                                     (p_[:, 2] // cell).astype(int).tolist()))
-        box[row["mesh"]] = (p_[:, 0].min(), p_[:, 0].max(),
+        box[mesh_key(row)] = (p_[:, 0].min(), p_[:, 0].max(),
                             p_[:, 2].min(), p_[:, 2].max())
     fine = [r for r in live if rank(r["mesh"]) == 0]
     coarse = [r for r in live if (rank(r["mesh"]) or 0) > 0]
@@ -330,16 +333,16 @@ def drop_coplanar_duplicates(rows, points, gap=0.01):
     # them drawing. What matters is whether the high detail surface already
     # occupies that ground at that height, whatever it paints it with.
     for b_row in sorted(coarse, key=lambda r: -(rank(r["mesh"]) or 0)):
-        pb = arr[b_row["mesh"]]
-        bx0, bx1, bz0, bz1 = box[b_row["mesh"]]
+        pb = arr[mesh_key(b_row)]
+        bx0, bx1, bz0, bz1 = box[mesh_key(b_row)]
         over = [r for r in fine
-                if not (box[r["mesh"]][1] < bx0 or box[r["mesh"]][0] > bx1
-                        or box[r["mesh"]][3] < bz0 or box[r["mesh"]][2] > bz1)]
+                if not (box[mesh_key(r)][1] < bx0 or box[mesh_key(r)][0] > bx1
+                        or box[mesh_key(r)][3] < bz0 or box[mesh_key(r)][2] > bz1)]
         if not over:
             continue
         union = set()
         for r in over:
-            union |= grid[r["mesh"]]
+            union |= grid[mesh_key(r)]
         bi = (pb[:, 0] // cell).astype(int)
         bk = (pb[:, 2] // cell).astype(int)
         inside = np.fromiter(
@@ -350,7 +353,7 @@ def drop_coplanar_duplicates(rows, points, gap=0.01):
         if inside.mean() < 0.7:
             continue
         sel = pb[inside]
-        pool = np.concatenate([arr[r["mesh"]] for r in over])
+        pool = np.concatenate([arr[mesh_key(r)] for r in over])
         dx = sel[:, 0][:, None] - pool[:, 0][None, :]
         dz = sel[:, 2][:, None] - pool[:, 2][None, :]
         d2 = dx * dx + dz * dz
@@ -373,7 +376,7 @@ def drop_coplanar_duplicates(rows, points, gap=0.01):
     return dropped
 
 
-def uv_samples(node, out, per_mesh=200):
+def uv_samples(node, out, per_mesh=200, key=None):
     """Triangle-centre UVs for this mesh, wrapped into the texture.
 
     A building's white wall can be a small corner of a large atlas, so the
@@ -394,7 +397,7 @@ def uv_samples(node, out, per_mesh=200):
         u = (a[0] + b[0] + c[0]) / 3.0
         v = (a[1] + b[1] + c[1]) / 3.0
         pts.append([round(u % 1.0, 4), round(v % 1.0, 4)])
-    out[node.name] = pts
+    out[key if key is not None else node.name] = pts
 
 
 def surfaces_under_rubber(rows, points, reach=1.5, height=0.3, share=0.08):
@@ -418,14 +421,14 @@ def surfaces_under_rubber(rows, points, reach=1.5, height=0.3, share=0.08):
             continue
         if "groove" in r["ac_material"].lower():
             continue
-        for x, y, z in points.get(r["mesh"]) or ():
-            grid[(int(x // reach), int(z // reach))].append((x, y, z, r["ac_material"]))
+        for x, y, z in points.get(mesh_key(r)) or ():
+            grid[(int(x // reach), int(z // reach))].append((x, y, z, r.get("material_id", r["ac_material"])))
     votes = collections.Counter()
     cast = 0
     for r in rows:
         if "groove" not in r["ac_material"].lower() or not r.get("render", True)                 or r.get("lod_of"):
             continue
-        for x, y, z in points.get(r["mesh"]) or ():
+        for x, y, z in points.get(mesh_key(r)) or ():
             gx, gz = int(x // reach), int(z // reach)
             best = None
             for dx in (-1, 0, 1):
@@ -446,7 +449,7 @@ def surfaces_under_rubber(rows, points, reach=1.5, height=0.3, share=0.08):
 
 def csp_config_paths(track_dir, ac_root):
     """The CSP config files that exist for this track."""
-    track = os.path.basename(os.path.abspath(track_dir).rstrip("\/"))
+    track = os.path.basename(os.path.abspath(track_dir).rstrip("\\/"))
     paths = [os.path.join(ac_root, "extension", "config", "tracks", "loaded", track + ".ini"),
              os.path.join(ac_root, "extension", "config", "tracks", track + ".ini"),
              os.path.join(track_dir, "extension", "ext_config.ini")]
@@ -471,7 +474,7 @@ def csp_grass_fx(track_dir, ac_root):
                 k, v = line.split("=", 1)
                 if k.strip().upper() == "GRASS_MATERIALS":
                     pats += [x.strip() for x in v.split(",") if x.strip()]
-    return [re.compile("^" + re.escape(x).replace("\?", ".*") + "$", re.I) for x in pats]
+    return [re.compile("^" + re.escape(x).replace(r"\?", ".*") + "$", re.I) for x in pats]
 
 
 # July 1st: where a race is normally set, and what SEASON_SUMMER means here.
@@ -554,11 +557,11 @@ def csp_adjustments(track_dir, ac_root):
         pats = [x.strip() for x in b.get("MATERIALS", "").split(",") if x.strip()]
         if not pats:
             continue
-        rx = [re.compile("^" + re.escape(x).replace("\?", ".*") + "$", re.I) for x in pats]
+        rx = [re.compile("^" + re.escape(x).replace(r"\?", ".*") + "$", re.I) for x in pats]
         for k, key in b.items():
             if not k.startswith("KEY_"):
                 continue
-            if key not in ("ksDiffuse", "ksAmbient"):
+            if key not in ("ksDiffuse", "ksAmbient", "ksSpecular"):
                 continue
             try:
                 val = float(b.get("VALUE_" + k[4:], "").split(",")[0])
@@ -570,6 +573,21 @@ def csp_adjustments(track_dir, ac_root):
                 continue
             out.setdefault(tuple(x.pattern for x in rx), {})[key] = val
     return [(tuple(re.compile(p, re.I) for p in pats), vals) for pats, vals in out.items()]
+
+
+def csp_specular_mult(track_dir, ac_root):
+    value = 1.0
+    for path in csp_config_paths(track_dir, ac_root):
+        inside = False
+        for raw in open(path, encoding="utf-8", errors="replace"):
+            line = raw.split(";")[0].strip()
+            if line.startswith("["):
+                inside = line.upper() == "[LIGHTING]"
+            elif inside and "=" in line:
+                key, val = line.split("=", 1)
+                if key.strip().upper() == "SPECULAR_MULT":
+                    value = float(val.strip())
+    return value
 
 
 def drop_far_lods(rows):
@@ -965,8 +983,7 @@ def extract_textures(kn5_paths, tex_dir, names):
         ver = struct.unpack_from("<I", d, p)[0]
         p += 4
         if ver > 5:
-            extra = struct.unpack_from("<I", d, p)[0]
-            p += 4 + extra
+            p += 4  # v6 extra is metadata, not a byte count
         cnt = struct.unpack_from("<I", d, p)[0]
         p += 4
         for _ in range(cnt):
@@ -1060,31 +1077,32 @@ def main():
     tex_names = texture_filenames(sorted(alpha))
 
     variants = OrderedDict()
+    material_names = MaterialNames()
     mesh_rows = []
     unmatched = defaultdict(int)
 
-    for path in kn5_paths:
+    for model_index, path in enumerate(kn5_paths):
         if not os.path.exists(path):
             print("  skip missing %s" % os.path.basename(path))
             continue
         k = KN5(path, geometry=True, placement=placed.get(path))
         print("%s: %d materials, %d textures, version %d"
               % (os.path.basename(path), len(k.materials), len(k.textures), k.version))
-        for n in k.walk():
-            if n.type not in (2, 3):
-                continue
+        for mesh_id, n in model_meshes(k, model_index):
             mat = k.materials[n.material_id]
             key, physical = surface_for_mesh(n.name, list(surfaces.keys()))
             if physical and key is None:
                 unmatched[re.sub(r"^\d+", "", n.name)] += 1
-            if physical:
-                prefix = SURFACE_MAP.get((key or "").upper(), DEFAULT_PREFIX)
-                rf2_mat = "%s_%s" % (prefix, safe(mat.name))
-            else:
-                rf2_mat = safe(mat.name)
-            variants[(mat.name, key)] = rf2_mat
+            prefix = surface_prefix(key) if physical else None
+            rf2_mat = material_names.get(mat, prefix)
+            material_id = material_signature(mat)
+            variants[(material_id, key, physical)] = rf2_mat
             mesh_rows.append({
                 "mesh": n.name,
+                "mesh_id": mesh_id,
+                "material_id": material_id,
+                "surface_prefix": prefix,
+                "surface_kind": SURFACE_MAP.get((key or "").upper(), DEFAULT_PREFIX),
                 "ac_material": mat.name,
                 "shader": mat.shader,
                 "surface": key,
@@ -1159,18 +1177,18 @@ def main():
     line_pts = racing_line(layout_root)
     # Sampled in world space so the coplanar test below can tell a second copy
     # of a surface from a separate object that merely sits near it.
-    want_points = {m["mesh"] for m in mesh_rows if m.get("render", True)}
+    want_points = {mesh_key(m) for m in mesh_rows if m.get("render", True)}
     world_pts = {}
     uv_seen = {}
-    mat_of_mesh = {m["mesh"]: m["ac_material"] for m in mesh_rows}
-    for path in kn5_paths:
+    mat_of_mesh = {mesh_key(m): m["material_id"] for m in mesh_rows}
+    for model_index, path in enumerate(kn5_paths):
         if not os.path.exists(path):
             continue
         model = KN5(path, geometry=True, placement=placed.get(path))
-        for n in model.walk():
-            if n.name in want_points and n.name not in world_pts:
-                world_pts[n.name] = world_points(n, samples=1500)
-                uv_samples(n, uv_seen)
+        for mesh_id, n in model_meshes(model, model_index):
+            if mesh_id in want_points:
+                world_pts[mesh_id] = world_points(n, samples=1500)
+                uv_samples(n, uv_seen, key=mesh_id)
             if n.type not in (2, 3) or not n.uvs or not n.verts:
                 continue
             us = [u for u, _v in n.uvs]
@@ -1180,7 +1198,7 @@ def main():
             span = ((max(xs) - min(xs)) ** 2 + (max(zs) - min(zs)) ** 2) ** 0.5
             if span > 20 and du > 0.05:
                 # must come from this model, not whichever was loaded last
-                name = model.materials[n.material_id].name
+                name = material_signature(model.materials[n.material_id])
                 spans[name].append(du / span)
                 per_axis[name].extend(uv_metres(n))
                 flatness[name].append(upward_fraction(n))
@@ -1223,20 +1241,20 @@ def main():
     else:
         near_line = dict(ground)
     for m in mesh_rows:
-        m["uv_per_m"] = uv_per_m.get(m["ac_material"], 0.0)
-        mu, mv = axis_m.get(m["ac_material"], (0.0, 0.0))
+        m["uv_per_m"] = uv_per_m.get(m["material_id"], 0.0)
+        mu, mv = axis_m.get(m["material_id"], (0.0, 0.0))
         m["m_per_u"], m["m_per_v"] = mu, mv
         # Repeating a texture only makes sense on ground-like surfaces. A
         # building facade carries unique content and must never be tiled.
-        m["ground_like"] = bool(ground.get(m["ac_material"], False))
+        m["ground_like"] = bool(ground.get(m["material_id"], False))
         # The median share of this material's triangles facing up, kept as a
         # number as well as the strict ground_like flag. The exporter needs to
         # tell a flat surface from an upright one: flat ground keeps rF2's
         # plain 1.0, while a wall, a grandstand or a tree trunk has its
         # reflectance aimed at rF2's albedo band.
-        _f = flatness.get(m["ac_material"])
+        _f = flatness.get(m["material_id"])
         m["flatness"] = round(_stats.median(_f), 3) if _f else 0.0
-        m["track_surface"] = bool(near_line.get(m["ac_material"], False))
+        m["track_surface"] = bool(near_line.get(m["material_id"], False))
 
     extra = drop_extra_lods(mesh_rows)
     if extra:
@@ -1281,9 +1299,10 @@ def main():
             m["alpha_test"] = True
     under = surfaces_under_rubber(mesh_rows, world_pts)
     for m in mesh_rows:
-        m["under_rubber"] = m["ac_material"] in under
+        m["under_rubber"] = m["material_id"] in under
     if under:
-        print("   surfaces under the racing line rubber: %s" % ", ".join(sorted(under)))
+        print("   surfaces under the racing line rubber: %s" % ", ".join(sorted(
+            {m["ac_material"] for m in mesh_rows if m["under_rubber"]})))
     by_mat_uv = {}
     for mesh, pts in uv_seen.items():
         mat = mat_of_mesh.get(mesh)
@@ -1299,8 +1318,9 @@ def main():
     print("material variants: %d needed from %d AC materials"
           % (len(variants), len(ac_mats)))
     split = defaultdict(set)
-    for (mat, key) in variants:
-        split[mat].add(key)
+    material_labels = {m["material_id"]: m["ac_material"] for m in mesh_rows}
+    for mat, key, _physical in variants:
+        split[material_labels[mat]].add(key)
     for mat, keys in sorted(split.items()):
         if len(keys) > 1:
             print("  split '%s' across surfaces: %s"
@@ -1315,25 +1335,9 @@ def main():
     # Terrain definition. Rather than author one from scratch, patch rF2's own
     # file: it already defines every surface type correctly, so we only swap in
     # the grip values AC specifies for this track.
-    used = OrderedDict()
-    for m in phys:
-        prefix = m["rf2_material"].split("_", 1)[0]
-        used.setdefault(prefix, m["surface"])
-    grip, drivable = {}, []
-    for prefix, key in used.items():
-        info = surfaces.get(key or "", {"friction": 1.0, "valid": False})
-        grip[prefix] = info["friction"]
-        if info.get("valid"):
-            drivable.append(prefix.lower())
-    tdf_text, applied = patch_tdf(args.tdf_template, grip, drivable)
+    tdf_text, applied = surface_tdf(args.tdf_template, phys, surfaces)
     write(os.path.join(out_dir, track_id + ".tdf"), tdf_text)
-    for prefix, dry in sorted(applied.items()):
-        print("  terrain %-8s dry grip %.3f (from AC)" % (prefix, dry))
-    missing = [p for p in grip if p not in applied]
-    if missing:
-        # Expected for barriers: you hit them, you do not drive on them.
-        print("  no grip block for %s (not drivable in AC, so that is right)"
-              % ", ".join(missing))
+    print("  terrain: %d distinct AC surfaces" % len(applied))
 
     # scene file, collision only on physical meshes
     scn = ["// generated from %s" % track_id,
@@ -1355,13 +1359,15 @@ def main():
           "  Altitude = 0\n}\n" % (track_id, track_id, track_id, track_id, track_id))
 
     write(os.path.join(out_dir, "material_map.json"), json.dumps({
+        "schema_version": SCHEMA_VERSION,
         "track": track_id,
         "kn5": kn5_paths,
         "placements": placed,
         "meshes": mesh_rows,
-        "variants": {"%s|%s" % (a, b): v for (a, b), v in variants.items()},
+        "variants": {"%s|%s|%s" % key: v for key, v in variants.items()},
         "texture_files": tex_names,
         "lighting": lighting(layout_root),
+        "specular_mult": csp_specular_mult(track_dir, args.ac_root),
         # Where on its texture each material actually samples, so brightness
         # can be judged from what is drawn rather than from the whole atlas.
         "uv_samples": by_mat_uv,

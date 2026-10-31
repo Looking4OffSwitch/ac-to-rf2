@@ -1,7 +1,7 @@
 """Standalone reader for Assetto Corsa .kn5 files.
 
 Format (version 5-6):
-  "sc6969", u32 version, [u32 extra_len + bytes if version > 5]
+  "sc6969", u32 version, [u32 extra if version > 5]
   u32 texture_count, then per texture: u32 type, str name, u32 size, bytes
   u32 material_count, then per material: see read_material
   node tree, depth first
@@ -194,9 +194,7 @@ class KN5:
         r.skip(6)
         self.version = r.u32()
         if self.version > 5:
-            extra = r.u32()
-            if extra:
-                r.skip(extra)
+            self.extra = r.u32()  # v6 metadata integer, not a payload length
         self.textures = []
         for _ in range(r.u32()):
             ttype = r.u32()
@@ -254,15 +252,15 @@ class KN5:
         if n.type == 1:
             n.matrix = r.vec(16)
         elif n.type in (2, 3):
+            n.cast_shadows = r.u8()
+            n.visible = r.u8()
+            n.transparent = r.u8()
             if n.type == 3:
-                # skinned: bone table then per bone matrices
+                # Skinned flags precede the bone table.
                 bones = r.u32()
                 for _ in range(bones):
                     r.string()
                     r.vec(16)
-            n.cast_shadows = r.u8()
-            n.visible = r.u8()
-            n.transparent = r.u8()
             n.vertex_count = r.u32()
             # position 3f, normal 3f, uv 2f, tangent 3f
             stride = 44 if n.type == 2 else 76
@@ -277,9 +275,12 @@ class KN5:
             n.layer = r.u32()
             n.lod_in = r.f32()
             n.lod_out = r.f32()
-            n.center = r.vec(3)
-            n.radius = r.f32()
-            n.renderable = r.u8()
+            if n.type == 2:
+                n.center = r.vec(3)
+                n.radius = r.f32()
+                n.renderable = r.u8()
+            else:
+                n.center, n.radius, n.renderable = (0.0, 0.0, 0.0), 0.0, True
         else:
             raise ValueError('unknown node type %d at %s' % (n.type, n.name))
         for _ in range(child_count):

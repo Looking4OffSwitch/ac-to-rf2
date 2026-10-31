@@ -32,11 +32,11 @@ per-track hacks. It has been tested on Silverstone, Spa, Laguna Seca and Highlan
 | Windows | 10 or 11 | The scripts call Windows tools (`texconv.exe`, Blender) |
 | Memory | 16 GB recommended | With less, the converter runs fewer jobs side by side and takes longer (see `--jobs`) |
 | [Assetto Corsa](https://store.steampowered.com/app/244210/Assetto_Corsa/) | any | Steam. Provides the tracks to convert and `system/data/surfaces.ini` |
-| [rFactor 2](https://store.steampowered.com/app/365960/rFactor_2/) | current Steam build | Steam. Includes ModDev, `texconv.exe` and the GMT exporter add-on |
+| [rFactor 2](https://store.steampowered.com/app/365960/rFactor_2/) | current Steam build | Steam. Includes ModDev and `texconv.exe`; the GMT exporter is separate |
 | [Python](https://www.python.org/downloads/windows/) | 3.10 or newer | python.org. Tick **"Add python.exe to PATH"** in the installer |
-| [NumPy](https://numpy.org/install/) | 1.24 or newer | `python -m pip install numpy` |
-| [Blender](https://download.blender.org/release/Blender3.6/) | **3.6 LTS** | blender.org release archive. The rF2 add-on supports Blender 3.3 to 3.6; the converter is tested with 3.6 |
-| rF2 GMT exporter add-on (`io_rf2_gmt_release`) | 24.3.9 tested | **Separate download, not included with rF2:** Studio-397 forum thread [Blender rFactor2 Export Scripts](https://forum.studio-397.com/index.php?threads/blender-rfactor2-export-scripts.74821/) |
+| [NumPy](https://numpy.org/install/) | 1.24 or newer | Installed by `python -m pip install -e .` |
+| [Blender](https://www.blender.org/releases/5-2/) | **5.2 LTS or newer** | blender.org release archive. The GMT exporter must also support the Python bundled with your Blender; see the compatibility note below |
+| rF2 GMT exporter add-on (`io_rfactor2_gmt`) | Compatible build required | **Separate download, not included with rF2:** Studio-397 forum thread [Blender rFactor2 Export Scripts](https://forum.studio-397.com/index.php?threads/blender-rfactor2-export-scripts.74821/) |
 | `texconv.exe` | ships with rF2 | `rFactor 2\Support\Tools\MapConverter\texconv.exe` |
 | [Custom Shaders Patch](https://acstuff.club/patch/) | optional | acstuff.club. Used only for its per-track config (material tweaks, GrassFX) when installed |
 
@@ -57,7 +57,7 @@ with `--rf2 "<rFactor 2 folder>"` or `--ac "<assettocorsa folder>"`.
 **Blender** is expected at its default location:
 
 ```
-C:\Program Files\Blender Foundation\Blender 3.6\blender.exe
+C:\Program Files\Blender Foundation\Blender 5.2\blender.exe
 ```
 
 If yours is elsewhere, pass `--blender "<path to blender.exe>"` to
@@ -68,23 +68,38 @@ full paths.
 
 ---
 
+## Exporter compatibility
+
+Blender 5.2 is the target. The vendor's current "Blender 5.0 plus" exporter
+archive contains Python 3.11 bytecode; Blender 5.2.3 bundles Python 3.13 and
+rejects it with "bad magic number". A source distribution or an exporter built
+for Blender 5.2 is required for geometry export. `ac2rf2-check` detects this
+before a conversion. Installing Blender alone does not supply the exporter.
+Python regression tests and the non-Blender stages run independently.
+
 ## Setup
 
-1. **Install Python and NumPy.** After installing Python, open a command prompt
-   and run:
+1. **Create and activate a Python environment.** In this repository, open a
+   Command Prompt and run:
+   ```bat
+   python -m venv .venv
+   .venv\Scripts\activate.bat
+   python -m pip install -e ".[dev]"
    ```
-   python -m pip install numpy
-   ```
-2. **Install Blender 3.6 LTS** to its default folder.
+   Activate the environment in each new terminal. Installed commands include
+   `ac2rf2`, `ac2rf2-check`, and `ac2rf2-verify`; `pytest` runs the regression
+   suite. The existing `python build_track.py` commands continue to work.
+   Documentation restructuring is tracked in [WORK_ITEMS.md](WORK_ITEMS.md).
+2. **Install Blender 5.2 LTS or newer** to its default folder.
 3. **Install the rF2 exporter add-on in Blender**
-   1. Download the add-on zip (`io_rf2_gmt_release_....zip`) from the Studio-397
+   1. Obtain a Blender 5.2-compatible add-on zip or source release from the Studio-397
       forum thread
       [Blender rFactor2 Export Scripts](https://forum.studio-397.com/index.php?threads/blender-rfactor2-export-scripts.74821/).
       Don't unzip it.
    2. Start Blender, open *Edit > Preferences > Add-ons*, click **Install...**
       and pick the zip.
 
-   That's all: the converter switches the add-on on by itself on every run.
+   The converter enables a compatible add-on on each run; setup verifies it first.
 4. **Get the code.** Either click **Code > Download ZIP** on the GitHub page and
    extract it anywhere, get it on the releases page or with git:
    ```

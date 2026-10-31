@@ -14,7 +14,6 @@ import sys
 import json
 
 import bpy
-import addon_utils
 from mathutils import Matrix, Vector
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -22,6 +21,9 @@ if HERE not in sys.path:
     sys.path.insert(0, HERE)
 from kn5 import KN5  # noqa: E402
 import backdrop  # noqa: E402
+from exporter_support import enable_exporter
+from scene_contract import model_meshes, index_meshes, SCHEMA_VERSION
+from material_policy import coefficient, opacity_mode, set_blending
 
 ADDON = "io_rf2_gmt_release"
 
@@ -170,7 +172,7 @@ def set_texture_flag(node, bit):
 def make_shader_template(template_ob, shader, slots):
     """Build one material carrying a shader, to copy per material later."""
     import importlib
-    nodes_mod = importlib.import_module("io_rf2_gmt_release.rF2_Nodes_Stuff")
+    nodes_mod = importlib.import_module(ADDON + ".rF2_Nodes_Stuff")
     ob = template_ob.copy()
     ob.data = template_ob.data.copy()
     bpy.context.collection.objects.link(ob)
@@ -302,7 +304,8 @@ def build_mesh(geom, matrix, name, material, template_empty, template_ob, coll,
     # triangles are more than 60 degrees off. The exporter writes split
     # normals (measured with probe_normals.py), which is where these live.
     if normals and len(normals) == len(me.vertices):
-        me.use_auto_smooth = True
+        # Auto Smooth was removed in Blender 4.1. Custom normals are enabled
+        # directly in 5.2; keep the authored per-vertex normals.
         me.normals_split_custom_set_from_vertices(normals)
     # clear_geometry() drops every layer, and the exporter reads all of these
     # by name. Recreate them or it fails on the first polygon. These go in with
@@ -469,10 +472,13 @@ def main():
     ambient_scale = diffuse_scale
     os.makedirs(out_dir, exist_ok=True)
 
-    addon_utils.enable(ADDON, default_set=True, persistent=True)
+    global ADDON
+    ADDON, _exporter = enable_exporter()
     silence_popups()
     data = json.load(open(map_path))
-    by_mesh = {m["mesh"]: m for m in data["meshes"]}
+    if data.get("schema_version") != SCHEMA_VERSION:
+        raise RuntimeError("material map is obsolete; rerun the complete build")
+    by_mesh = index_meshes(data["meshes"])
 
     template_empty, template_ob, template_mat, coll = make_template()
 
@@ -566,6 +572,7 @@ def main():
         if name in materials:
             continue
         pr = row.get("props", {})
+        mode = opacity_mode(row, data)
         # a baked multilayer composite replaces the near blank base
         diffuse = row.get("baked") or row["textures"].get("txDiffuse")
         # A cut-out samples its own copy, whose mips hold its threshold, and
@@ -610,7 +617,7 @@ def main():
                       "sSpec": maps or two.get("spec") or FLAT_SPEC,
                       "sBump": bump or FLAT_NM}
         elif (diffuse and bump_mat is not None
-                and (row.get("alpha_test")
+                and (mode == "cutout"
                      or (nm and not row.get("needs_blend")))):
             # Cut-outs have to come here even without a normal map. L2DIFFUSET0
             # has no alpha test in it, so the threshold we write is never
@@ -642,8 +649,8 @@ def main():
         # texture for composed materials and into the material for the rest,
         # which lit the two by different formulas and darkened every composed
         # surface's ambient by its own diffuse coefficient.
-        d = float(pr.get("ksDiffuse", 0.0)) or diffuse_level
-        a = float(pr.get("ksAmbient", 0.0)) or ambient_level
+        d = coefficient(pr, "ksDiffuse", diffuse_level)
+        a = coefficient(pr, "ksAmbient", ambient_level)
         # The racing line rubber keeps AC's own figure. It is an overlay whose
         # job is to darken the road beneath it, and it is the one thing in the
         # scene that reads by being much darker than its surroundings, so
@@ -652,8 +659,9 @@ def main():
         native = "groove" not in row["ac_material"].lower()
         gain = diffuse_scale
         # AC hands the road a separate multiplier for how wet-looking it is.
-        spec = (float(pr.get("ksSpecular", 0.0))
-                * (float(pr.get("tarmacSpecularMultiplier", 0.0)) or 1.0))
+        spec = (coefficient(pr, "csp_ksSpecular", coefficient(pr, "ksSpecular", 0.0))
+                * coefficient(pr, "tarmacSpecularMultiplier", 1.0)
+                * float(data.get("specular_mult", 1.0)))
         # Without a txMaps AC masks specular by the diffuse alpha, which rF2
         # never sees: it gets a flat specular map. Silverstone's grass asked
         # for 1.0 against an alpha averaging 0.23, and shone four times as
@@ -804,23 +812,9 @@ def main():
             mat.CarBody = True          # an attribute; the key is ignored
         except Exception:
             mat["Flag_0x00002000"] = 1
-        if row.get("needs_blend") and not row.get("alpha_test"):
-            mat["Blend"] = 1
-            mat["Flag_0x00000020"] = 1
-        if row.get("alpha_test") and name in cutout:
-            # Opaque, with the threshold alone doing the cutting -- which is
-            # how rF2 ships every cut-out it has. 73 of the 75 materials in
-            # Joesville and Loch Drummond carry One/Zero, trees, crowds,
-            # shrubs and chain link fences among them; only the grass verge
-            # and the road lines really blend. Asking for blending here is
-            # what drew the whole quad, and the threshold we asked for never
-            # arrived anyway: every gmt we have shipped so far came out
-            # One/Zero because Blend_Source_List set as a custom key is
-            # ignored. So the one thing that was ever wrong was the number.
+        set_blending(mat, mode)
+        if mode == "cutout":
             alpha_ref[name] = cutout[name]
-        elif row.get("needs_blend") and not row.get("alpha_test"):
-            mat["Blend_Source_List"] = 4
-            mat["Blend_Destination_List"] = 5
 
         if slots:
             for slot in slots:
@@ -888,10 +882,14 @@ def main():
                                          counts["two stage"], counts["bump"],
                                          counts["plain"], len(alpha_ref)))
 
-    total_meshes = sum(1 for m in data["meshes"] if m["mesh"] in by_mesh)
+    total_meshes = sum(1 for m in data["meshes"] if m.get("tris", 0) > 0
+                       and (m.get("render", True) or m.get("physical")))
     progress_path = os.path.join(out_dir, "progress.txt")
-    before = set(os.listdir(out_dir))
     exported = []
+    failures = []
+    record_path = os.path.join(out_dir, "exported.json")
+    if os.path.exists(record_path):
+        os.remove(record_path)
     used_names = set()
     count = 0
     # Meshes too big for a 16 bit index are split, so the number of files
@@ -905,12 +903,12 @@ def main():
     load = [0] * shards
     seq = -1
 
-    for path in data["kn5"]:
+    for model_index, path in enumerate(data["kn5"]):
         k = KN5(path, geometry=True, placement=data.get("placements", {}).get(path))
-        for node in k.walk():
-            if node.type not in (2, 3) or not node.index_count:
+        for mesh_id, node in model_meshes(k, model_index):
+            if not node.index_count:
                 continue
-            row = by_mesh.get(node.name)
+            row = by_mesh.get(mesh_id)
             if row is None:
                 continue
             # Neither drawn nor collided with: an AC logic marker such as an
@@ -921,7 +919,7 @@ def main():
             # not exported. Timing strips are generated separately.
             if not row.get("render", True) and not row.get("physical"):
                 continue
-            name = sanitize(node.name)
+            name = "m%s_%s" % (mesh_id.replace(":", "n"), sanitize(node.name)[:36])
             n, i = name, 1
             while n in used_names:
                 i += 1
@@ -987,23 +985,23 @@ def main():
                         filename=empty.name + ".gmt",
                         check_existing=False)
                     now = set(os.listdir(out_dir))
-                    # Look for the file we asked for. Diffing the directory is
-                    # not enough: the addon renames on collisions, so the new
-                    # entry can carry a name we never chose and be missed.
+                    # Require the exact requested file. An unrelated directory
+                    # entry must never count as a successfully exported mesh.
                     want = (pname + ".gmt").lower()
                     match = next((f for f in now if f.lower() == want), None)
-                    new = sorted(now - before)
-                    before = now
-                    if match or new:
+                    if match and os.path.getsize(os.path.join(out_dir, match)) >= 264:
                         exported.append({
                             "mesh": row["mesh"],
-                            "gmt": match or new[0],
+                            "mesh_id": mesh_id,
+                            "part": pi,
+                            "parts": len(parts),
+                            "gmt": match,
                             "material": row["rf2_material"],
                             "physical": row["physical"],
                             "render": row.get("render", True),
                             "lod_in": row.get("lod_in", 0.0),
                             "lod_out": row.get("lod_out", 0.0),
-                            "blend": row.get("needs_blend", False),
+                            "blend": opacity_mode(row, data) == "blend",
                             "radius": row.get("radius", 0.0),
                             "tris": row["tris"],
                         })
@@ -1012,8 +1010,10 @@ def main():
                             # build_track sorts the shards back by it.
                             exported[-1]["_seq"] = [seq, pi]
                     else:
+                        failures.append("missing or truncated export: " + pname)
                         print("!! no file produced for %s" % pname)
                 except Exception as exc:
+                    failures.append("%s: %s" % (pname, exc))
                     print("!! export %s: %s" % (pname, str(exc)[:120]))
 
                 # Free immediately. Holding 300 meshes of this size at once
@@ -1051,10 +1051,7 @@ def main():
         clear_img = image_for("_invisible.dds")
         trig_mat = template_mat.copy()
         trig_mat.name = "road_timing"
-        trig_mat["Blend"] = 1
-        trig_mat["Flag_0x00000020"] = 1
-        trig_mat["Blend_Source_List"] = 4
-        trig_mat["Blend_Destination_List"] = 5
+        set_blending(trig_mat, "blend")
         node = trig_mat.node_tree.nodes.get("sTex0")
         if node is not None and clear_img is not None:
             node.image = clear_img
@@ -1077,27 +1074,29 @@ def main():
                 now = set(os.listdir(out_dir))
                 want = (spec["name"] + ".gmt").lower()
                 match = next((f for f in now if f.lower() == want), None)
-                new = sorted(now - before)
-                before = now
-                if match or new:
-                    exported.append({"mesh": spec["name"], "gmt": match or new[0],
+                if match and os.path.getsize(os.path.join(out_dir, match)) >= 264:
+                    exported.append({"mesh": spec["name"], "gmt": match,
                                      "material": "road_timing",
                                      "physical": True, "timing": True,
                                      "tris": 2})
                     if shards > 1:
                         # After every mesh, as in a single run.
                         exported[-1]["_seq"] = [seq + 1, len(exported)]
-                    print("timing poly %s -> %s" % (spec["name"], match or new[0]))
+                    print("timing poly %s -> %s" % (spec["name"], match))
                 else:
+                    failures.append("missing timing strip: " + spec["name"])
                     print("!! no file produced for %s" % spec["name"])
             except Exception as exc:
+                failures.append("%s: %s" % (spec["name"], exc))
                 print("!! export %s: %s" % (spec["name"], str(exc)[:120]))
             mesh_data = ob.data
             bpy.data.objects.remove(ob, do_unlink=True)
             bpy.data.objects.remove(empty, do_unlink=True)
             bpy.data.meshes.remove(mesh_data, do_unlink=True)
 
-    with open(os.path.join(out_dir, "exported.json"), "w") as f:
+    if failures:
+        raise RuntimeError("geometry export failed: " + "; ".join(failures))
+    with open(record_path, "w") as f:
         json.dump(exported, f, indent=1)
     print("EXPORTED %d of %d" % (len(exported), count))
 

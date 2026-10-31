@@ -12,6 +12,7 @@ import re
 import sys
 import json
 import struct
+from scene_contract import index_meshes, mesh_key, validate_exports
 
 # Measured by exporting one mesh twice with different thresholds and diffing:
 # exactly one byte moved. From the START of the texture name, not the end --
@@ -67,7 +68,7 @@ def material_colours(data, shader_at):
 def read_gmt(path):
     b = open(path, "rb").read()
     out = {"shader": shader_of(b),
-           "textures": set(re.findall(rb"[A-Za-z0-9_\-]+\.dds", b)),
+           "textures": set(re.findall(rb"[A-Za-z0-9_\-]+\.(?:dds|tga|png|jpg|bmp)", b, re.I)),
            "strings": set(x.group().decode()
                           for x in re.finditer(rb"[ -~]{3,}", b)),
            "materials": [], "alpha_refs": {}}
@@ -79,7 +80,7 @@ def read_gmt(path):
         if 0.0 <= amb <= 1.0 and 0.0 <= dif <= 1.0:
             out["materials"].append((m.group().decode(), amb, dif))
     out["tex_flags"] = {}
-    for m in re.finditer(rb"[A-Za-z0-9_\-]+\.dds", b):
+    for m in re.finditer(rb"[A-Za-z0-9_\-]+\.(?:dds|tga|png|jpg|bmp)", b, re.I):
         at = m.start() + ALPHA_REF_OFFSET
         if at < len(b):
             out["alpha_refs"][m.group().decode()] = b[at]
@@ -125,19 +126,42 @@ def vertical_normal_share(path, limit=4000):
     return sum(ny > 0.99 for ny in rec) / float(len(rec))
 
 
-def main():
-    installed, out_dir = sys.argv[1], sys.argv[2]
+def verify(installed, out_dir):
+    installed, out_dir = os.fspath(installed), os.fspath(out_dir)
     gmt_dir = os.path.join(installed, "Assets", "GMTs")
     map_dir = os.path.join(installed, "Assets", "MAPs")
     venue = os.path.basename(installed.rstrip("\\/"))
     scn = os.path.join(installed, venue, venue + ".scn")
     data = json.load(open(os.path.join(out_dir, "material_map.json")))
 
-    rows = {m["mesh"]: m for m in data["meshes"]}
+    rows = index_meshes(data["meshes"])
     on_disk = set(os.listdir(map_dir))
     scene = open(scn, encoding="utf-8", errors="replace").read()
 
     problems = []
+    for required in (os.path.join(installed, venue, venue + ".gdb"),
+                     os.path.join(installed, venue, venue + ".AIW"),
+                     os.path.join(installed, venue + ".tdf")):
+        if not os.path.isfile(required) or not os.path.getsize(required):
+            problems.append("missing required location file: " + required)
+    rec_path = os.path.join(out_dir, "gmt", "exported.json")
+    records = json.load(open(rec_path)) if os.path.exists(rec_path) else []
+    try:
+        validate_exports(data, records, gmt_dir)
+    except ValueError as exc:
+        problems.append(str(exc))
+    scene_files = re.findall(r"MeshFile\s*=\s*([^\s{}]+)", scene, re.I)
+    scene_names = {f.lower() for f in scene_files}
+    wanted = {r["gmt"].lower() for r in records}
+    if wanted - scene_names:
+        problems.append("exported GMTs missing from scene: " + str(sorted(wanted - scene_names)))
+    for filename in scene_files:
+        if not os.path.isfile(os.path.join(gmt_dir, filename)):
+            problems.append("scene references missing GMT: " + filename)
+    timing = {os.path.splitext(r["gmt"])[0].lower() for r in records if r.get("timing")}
+    if {"xfinish", "xsector1", "xsector2"} - timing:
+        problems.append("timing strip export records are missing")
+    on_disk_lower = {t.lower() for t in on_disk}
 
     # 1. every texture a mesh asks for is actually installed, and no slot name
     #    ended up where a filename belongs
@@ -148,7 +172,7 @@ def main():
             continue
         g = read_gmt(os.path.join(gmt_dir, f))
         for t in g["textures"]:
-            if t.decode() not in on_disk:
+            if t.decode().lower() not in on_disk_lower:
                 missing.add(t.decode())
         leaked += [(f, s) for s in SLOT_NAMES & g["strings"]]
         refs[f] = g
@@ -167,7 +191,7 @@ def main():
             continue                    # a real PNG/TGA, which rF2 loads
         if head[:4] != b"DDS ":
             unloadable.append(t + " (not DDS)")
-        elif min(struct.unpack_from("<II", head, 12)) < 4:
+        elif len(head) < 20 or min(struct.unpack_from("<II", head, 12)) < 4:
             unloadable.append(t + " (under 4x4)")
     if unloadable:
         problems.append("textures rF2 cannot load: %s" % unloadable[:5])
@@ -179,10 +203,10 @@ def main():
     # Only meshes that were exported at all can be drawn; one that is neither
     # drawn nor collidable is now left out of the export entirely.
     rec_path = os.path.join(out_dir, "gmt", "exported.json")
-    shipped = ({r.get("mesh") for r in json.load(open(rec_path))}
-               if os.path.exists(rec_path) else set(want_hidden))
-    still_drawn = [n for n in want_hidden if n in shipped
-                   and re.sub(r"[^A-Za-z0-9_]", "_", n) not in hidden]
+    still_drawn = [r["gmt"] for r in records
+                   if mesh_key(r) in rows
+                   and not rows[mesh_key(r)].get("render", True)
+                   and os.path.splitext(r["gmt"])[0] not in hidden]
     if still_drawn:
         problems.append("meant to be hidden but still drawn: %d, e.g. %s"
                         % (len(still_drawn), still_drawn[:4]))
@@ -209,7 +233,7 @@ def main():
     exported = {}
     rec = os.path.join(out_dir, "gmt", "exported.json")
     if os.path.exists(rec):
-        exported = {r["gmt"]: r.get("mesh") for r in json.load(open(rec))}
+        exported = {r["gmt"]: mesh_key(r) for r in json.load(open(rec))}
     else:
         # Say so rather than quietly checking nothing and reporting no faults,
         # which is the failure this whole script exists to stop.
@@ -227,6 +251,7 @@ def main():
         disk = data.get("cutout_tex", {}).get(row["rf2_material"]) or (
             t if row.get("baked") else data.get("texture_files", {}).get(t, t))
         if disk not in g["alpha_refs"]:
+            problems.append("expected cut-out texture %s missing from %s" % (disk, fname))
             continue
         # From this mesh's own material. One texture can serve two materials
         # with different thresholds -- BBGRASS_D is the grass at 26 and the
@@ -251,8 +276,8 @@ def main():
         disk = data.get("cutout_tex", {}).get(row["rf2_material"]) or (
             t if row.get("baked") else data.get("texture_files", {}).get(t, t))
         fl = g["tex_flags"].get(disk)
-        if fl is not None and not fl & COLOR_KEY:
-            unkeyed.append("%s %s 0x%08x" % (fname, disk, fl))
+        if fl is None or not fl & COLOR_KEY:
+            unkeyed.append("%s %s flags=%r" % (fname, disk, fl))
     if unkeyed:
         problems.append("cut-outs whose alpha test is not switched on "
                         "(no colour key, so the threshold is ignored and the "
@@ -345,6 +370,10 @@ def main():
         return 1
     print("all checks passed")
     return 0
+
+
+def main():
+    return verify(sys.argv[1], sys.argv[2])
 
 
 if __name__ == "__main__":

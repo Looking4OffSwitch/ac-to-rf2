@@ -20,9 +20,10 @@ import argparse
 import subprocess
 
 from parallel import default_jobs
+from scene_contract import validate_exports
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-BLENDER = r"C:\Program Files\Blender Foundation\Blender 3.6\blender.exe"
+BLENDER = r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
 
 
 def step(n, title):
@@ -165,10 +166,7 @@ def blender_stage(pre, post, gmt_dir, jobs):
         # A single run would have had the exporter rename or overwrite a
         # clash. None has been seen (six tracks); say so loudly if one is.
         if e["gmt"].lower() in names:
-            msg = "WARNING two meshes exported as %s; kept the first" % e["gmt"]
-            print("   " + msg)
-            WARNINGS.append(msg)
-            continue
+            raise SystemExit("geometry stage: duplicate GMT " + e["gmt"])
         names.add(e["gmt"].lower())
         os.replace(src, os.path.join(gmt_dir, e["gmt"]))
         merged.append(e)
@@ -287,6 +285,11 @@ def main():
     if not exported:
         print(log[-2500:] if not args.skip_geometry else "")
         raise SystemExit("geometry stage produced nothing; see the output above")
+    mapping = json.load(open(os.path.join(out, "material_map.json")))
+    try:
+        validate_exports(mapping, exported, gmt_dir)
+    except ValueError as exc:
+        raise SystemExit("geometry stage: %s" % exc)
     print("   %d meshes exported" % len(exported))
 
     step(7, "scene, database and install")
