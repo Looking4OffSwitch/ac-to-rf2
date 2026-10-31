@@ -12,7 +12,7 @@ import re
 import math
 import glob
 import argparse
-import configparser
+from source_formats import read_ini, ini_required, ini_vector, ini_number, SourceFormatError
 
 HEAD = "//[[gMa1.002f (c)2015    ]] [[ converted from Assetto Corsa ]]\n"
 
@@ -50,35 +50,30 @@ BODY = """TrackingCam={name}
 """
 
 
-def vec(s):
-    return [float(v) for v in s.replace(",", " ").split()]
-
-
 def read_cameras(data_dir):
     out = []
     for path in sorted(glob.glob(os.path.join(data_dir, "cameras*.ini"))):
-        cp = configparser.ConfigParser(strict=False, interpolation=None)
-        cp.optionxform = str
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            cp.read_file(f)
+        cp = read_ini(path)
         for sec in cp.sections():
             if not sec.startswith("CAMERA_"):
                 continue
             c = cp[sec]
-            if "POSITION" not in c or "FORWARD" not in c:
-                continue
+            ini_required(path, c, "POSITION")
+            ini_required(path, c, "FORWARD")
             # mirrored to match the geometry, which flips handedness
-            pos = vec(c["POSITION"])
-            fwd = vec(c["FORWARD"])
-            up = vec(c.get("UP", "0,1,0"))
+            pos = ini_vector(path, c, "POSITION")
+            fwd = ini_vector(path, c, "FORWARD")
+            up = ini_vector(path, c, "UP", "0,1,0")
+            if not any(fwd) or not any(up):
+                raise SourceFormatError("%s: [%s] FORWARD and UP must be nonzero" % (path, sec))
             out.append({
                 "pos": [-pos[0], pos[1], pos[2]],
                 "fwd": [-fwd[0], fwd[1], fwd[2]],
                 "up": [-up[0], up[1], up[2]],
-                "fov_min": float(c.get("MIN_FOV", 30) or 30),
-                "fov_max": float(c.get("MAX_FOV", 30) or 30),
-                "near": float(c.get("NEAR_PLANE", 1.05) or 1.05),
-                "far": float(c.get("FAR_PLANE", 3000) or 3000),
+                "fov_min": ini_number(path, c, "MIN_FOV", 30),
+                "fov_max": ini_number(path, c, "MAX_FOV", 30),
+                "near": ini_number(path, c, "NEAR_PLANE", 1.05),
+                "far": ini_number(path, c, "FAR_PLANE", 3000),
                 "src": "%s/%s" % (os.path.basename(path), sec),
             })
     return out

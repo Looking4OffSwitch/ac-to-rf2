@@ -41,3 +41,19 @@ def set_blending(material, mode):
         setattr(material, name, value)
         if str(getattr(material, name)) != value:
             raise RuntimeError("rF2 exporter rejected material property " + name)
+
+
+# Names represented by the current generic mapping, measured on stock tracks.
+# This is a warning boundary, not a promise of identical renderer behavior.
+KNOWN_SOURCE_SHADERS = frozenset({
+    "GL", "ksFlags", "ksGrass", "ksTree", "ksMultilayer",
+    "ksMultilayer_fresnel_nm", "ksMultilayer_objsp", "ksPerPixel",
+    "ksPerPixelAT", "ksPerPixelAT_NM", "ksPerPixelAlpha", "ksPerPixelNM",
+    "ksPerPixelNM_UVMult", "ksPerPixelReflection", "ksPerPixelMultiMap",
+    "ksPerPixelMultiMapSimpleRefl", "ksPerPixelMultiMap_AT",
+    "ksPerPixelMultiMap_AT_NMDetail", "ksPerPixelMultiMap_NMDetail",
+})
+
+
+def unknown_shaders(materials):
+    return sorted({m.shader for m in materials} - KNOWN_SOURCE_SHADERS)

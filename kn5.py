@@ -8,36 +8,51 @@ Format (version 5-6):
 """
 import struct, sys, os, math
 
-class Reader:
-    def __init__(self, data):
-        self.d = data
-        self.p = 0
+import numpy as np
 
-    def u8(self):
-        v = self.d[self.p]; self.p += 1; return v
+from source_formats import Reader
 
-    def u16(self):
-        v = struct.unpack_from('<H', self.d, self.p)[0]; self.p += 2; return v
+SUPPORTED_VERSIONS = (5, 6)
+MAX_NODE_DEPTH = 256
 
-    def u32(self):
-        v = struct.unpack_from('<I', self.d, self.p)[0]; self.p += 4; return v
 
-    def i32(self):
-        v = struct.unpack_from('<i', self.d, self.p)[0]; self.p += 4; return v
+def _header(r):
+    if r.take(6) != b'sc6969':
+        r.fail("not a KN5 file (expected sc6969)", 0)
+    version = r.u32()
+    r.format_name = "KN5 v%d" % version
+    if version not in SUPPORTED_VERSIONS:
+        r.fail("unsupported version; supported: 5, 6", 6)
+    return version, r.u32() if version == 6 else 0
 
-    def f32(self):
-        v = struct.unpack_from('<f', self.d, self.p)[0]; self.p += 4; return v
 
-    def vec(self, n):
-        v = struct.unpack_from('<%df' % n, self.d, self.p); self.p += 4 * n; return v
+def _texture_table(r):
+    r.context = "textures"
+    entries = []
+    names = set()
+    for _ in range(r.count(12)):
+        texture_type = r.u32()
+        if texture_type not in (0, 1):
+            r.fail("unsupported texture active flag %d" % texture_type, r.p - 4)
+        name = r.string()
+        if not name or name.casefold() in names:
+            r.fail("empty or duplicate texture name %r" % name)
+        names.add(name.casefold())
+        size = r.u32()
+        offset = r.p
+        r.skip(size)
+        entries.append((name, texture_type, offset, size))
+    return entries
 
-    def string(self):
-        n = self.u32()
-        s = self.d[self.p:self.p + n]; self.p += n
-        return s.decode('utf-8', 'replace')
 
-    def skip(self, n):
-        self.p += n
+def iter_textures(path):
+    """Read the checked texture prefix using exactly the model reader's layout."""
+    with open(path, 'rb') as stream:
+        r = Reader(stream.read(), path, "KN5")
+    _header(r)
+    entries = _texture_table(r)
+    for name, texture_type, offset, size in entries:
+        yield name, texture_type, r.d[offset:offset + size]
 
 
 class Material:
@@ -187,26 +202,15 @@ class KN5:
         with open(path, 'rb') as f:
             data = f.read()
         self.size = len(data)
-        r = Reader(data)
-        sig = r.d[0:6]
-        if sig != b'sc6969':
-            raise ValueError('not a kn5 file, signature was %r' % sig)
-        r.skip(6)
-        self.version = r.u32()
-        if self.version > 5:
-            self.extra = r.u32()  # v6 metadata integer, not a payload length
-        self.textures = []
-        for _ in range(r.u32()):
-            ttype = r.u32()
-            name = r.string()
-            size = r.u32()
-            r.skip(size)
-            self.textures.append((name, ttype, size))
-        self.materials = []
-        for _ in range(r.u32()):
-            self.materials.append(self.read_material(r))
+        r = Reader(data, path, "KN5")
+        self.version, self.extra = _header(r)
+        self.textures = [(name, kind, size) for name, kind, _at, size in _texture_table(r)]
+        r.context = "materials"
+        self.materials = [self.read_material(r) for _ in range(r.count(22))]
         self.root = self.read_node(r, None)
         self.consumed = r.p
+        r.context = "end of node tree"
+        r.finish()
         self.folded_uvs = geometry and unfold_vertex_data(self)
         if placement:
             # Where the track's models.ini puts this whole file. A parent
@@ -222,69 +226,99 @@ class KN5:
     def read_material(self, r):
         m = Material()
         m.name = r.string()
+        r.context = "material %r" % m.name
         m.shader = r.string()
         m.blend = r.u8()
-        m.alpha_tested = r.u8()
+        m.alpha_tested = r.boolean()
         m.depth_mode = r.u32() if self.version > 4 else 0
+        if m.blend not in (0, 1, 2) or m.depth_mode not in (0, 1, 2):
+            r.fail("unsupported material blend/depth mode %d/%d" % (m.blend, m.depth_mode))
+        if not m.shader:
+            r.fail("empty material shader")
         m.props = {}
-        for _ in range(r.u32()):
+        for _ in range(r.count(44)):
             pname = r.string()
+            if pname in m.props:
+                r.fail("duplicate material property %r" % pname)
             value = r.f32()
-            r.vec(2)   # unused vec2 slot
-            r.vec(3)   # unused vec3 slot
-            r.vec(4)   # unused vec4 slot
+            r.skip(36)  # unused vec2/vec3/vec4 slots; only bounds are relevant
             m.props[pname] = value
         m.textures = {}
-        for _ in range(r.u32()):
+        for _ in range(r.count(12)):
             sample = r.string()
+            if sample in m.textures:
+                r.fail("duplicate texture sampler %r" % sample)
             slot = r.u32()
             tex = r.string()
             m.textures[sample] = tex
         return m
 
-    def read_node(self, r, parent):
+    def read_node(self, r, parent, depth=0):
+        r.context = "node at depth %d" % depth
+        if depth > MAX_NODE_DEPTH:
+            r.fail("node nesting exceeds supported depth %d" % MAX_NODE_DEPTH)
         n = Node()
         n.type = r.u32()
         n.name = r.string()
-        child_count = r.u32()
-        n.active = r.u8()
+        r.context = "node %r" % n.name
+        child_count = r.count(13)
+        n.active = r.boolean()
         n.parent = parent
         if n.type == 1:
             n.matrix = r.vec(16)
         elif n.type in (2, 3):
-            n.cast_shadows = r.u8()
-            n.visible = r.u8()
-            n.transparent = r.u8()
+            n.cast_shadows = r.boolean()
+            n.visible = r.boolean()
+            n.transparent = r.boolean()
             if n.type == 3:
                 # Skinned flags precede the bone table.
-                bones = r.u32()
+                bones = r.count(68)
                 for _ in range(bones):
                     r.string()
                     r.vec(16)
-            n.vertex_count = r.u32()
-            # position 3f, normal 3f, uv 2f, tangent 3f
+            # position 3f, normal 3f, uv 2f, tangent 3f (+ skin data)
             stride = 44 if n.type == 2 else 76
+            n.vertex_count = r.count(stride)
             vp = r.p
             r.skip(n.vertex_count * stride)
-            n.index_count = r.u32()
+            # Check the geometry even when lazy decoding/geometry=False is used.
+            view = memoryview(r.d)
+            values = np.ndarray((n.vertex_count, 8), dtype='<f4', buffer=r.d,
+                                offset=vp, strides=(stride, 4))
+            valid = np.isfinite(values).all(axis=1)
+            if not valid.all():
+                r.fail("non-finite position, normal or UV", vp + int(np.flatnonzero(~valid)[0]) * stride)
+            n.index_count = r.count(2)
+            if n.index_count % 3:
+                r.fail("index count %d is not a triangle list" % n.index_count, r.p - 4)
+            ip = r.p
+            r.require(n.index_count * 2)
+            indices = np.frombuffer(view, dtype='<u2', count=n.index_count, offset=ip)
+            bad = indices >= n.vertex_count
+            if bad.any():
+                i = int(np.flatnonzero(bad)[0])
+                r.fail("vertex index %d outside vertex count %d" % (indices[i], n.vertex_count), ip + i * 2)
             if self.geometry:
                 # Where to decode from when asked (see _lazy).
                 n.raw = (r.d, vp, n.vertex_count, stride, r.p, n.index_count)
             r.skip(n.index_count * 2)
             n.material_id = r.u32()
+            if n.material_id >= len(self.materials):
+                r.fail("material index %d outside material count %d" %
+                       (n.material_id, len(self.materials)), r.p - 4)
             n.layer = r.u32()
             n.lod_in = r.f32()
             n.lod_out = r.f32()
             if n.type == 2:
                 n.center = r.vec(3)
                 n.radius = r.f32()
-                n.renderable = r.u8()
+                n.renderable = r.boolean()
             else:
                 n.center, n.radius, n.renderable = (0.0, 0.0, 0.0), 0.0, True
         else:
-            raise ValueError('unknown node type %d at %s' % (n.type, n.name))
+            r.fail('unknown node type %d' % n.type)
         for _ in range(child_count):
-            n.children.append(self.read_node(r, n))
+            n.children.append(self.read_node(r, n, depth + 1))
         return n
 
     def walk(self, node=None):

@@ -11,14 +11,16 @@ import re
 import sys
 import json
 import argparse
-import configparser
 import shutil
 import steam_paths
 import struct
 from collections import OrderedDict, defaultdict
 
-from kn5 import KN5
+from kn5 import KN5, iter_textures
+from source_formats import (SourceFormatError, read_fast_lane_file, read_ini,
+                            ini_required, ini_number, ini_vector)
 from terrain import surface_tdf
+from material_policy import unknown_shaders
 from scene_contract import (SCHEMA_VERSION, MaterialNames, model_meshes, mesh_key,
                             material_signature, surface_prefix)
 
@@ -61,27 +63,7 @@ def texture_alpha_stats(kn5_paths):
     """Percentage of each embedded DXT5 texture that is fully opaque."""
     stats = {}
     for path in kn5_paths:
-        if not os.path.exists(path):
-            continue
-        with open(path, "rb") as f:
-            d = f.read()
-        p = 6
-        ver = struct.unpack_from("<I", d, p)[0]
-        p += 4
-        if ver > 5:
-            p += 4
-        count = struct.unpack_from("<I", d, p)[0]
-        p += 4
-        for _ in range(count):
-            p += 4
-            ln = struct.unpack_from("<I", d, p)[0]
-            p += 4
-            name = d[p:p + ln].decode("utf-8", "replace")
-            p += ln
-            size = struct.unpack_from("<I", d, p)[0]
-            p += 4
-            blob = d[p:p + size]
-            p += size
+        for name, _kind, blob in iter_textures(path):
             stats[name] = opaque_percent(blob)
     return stats
 
@@ -707,24 +689,21 @@ def layout_models(track_dir, layout=None):
     else:
         ini = os.path.join(track_dir, "models.ini")
         root = track_dir
+    if layout and not os.path.isfile(ini):
+        raise SourceFormatError("%s: requested layout model list is missing" % ini)
     models = read_ini(ini)
     out, warn, seen = [], [], set()
     for sec in models.sections():
         if not sec.startswith("MODEL_"):
             continue
-        f = (models[sec].get("FILE") or "").strip()
-        if not f:
-            continue
+        f = ini_required(ini, models[sec], "FILE")
         if f.lower() in seen:
             warn.append("%s listed more than once, loaded once" % f)
             continue
         seen.add(f.lower())
 
-        def vec(key):
-            raw = (models[sec].get(key) or "0,0,0").replace(" ", "").split(",")
-            v = [float(x) if x else 0.0 for x in raw[:3]]
-            return v + [0.0] * (3 - len(v))
-        pos, rot = vec("POSITION"), vec("ROTATION")
+        pos = ini_vector(ini, models[sec], "POSITION", "0,0,0", allow_short=True)
+        rot = ini_vector(ini, models[sec], "ROTATION", "0,0,0", allow_short=True)
         place = None
         if any(pos) or any(rot):
             place = (pos, rot)
@@ -734,10 +713,15 @@ def layout_models(track_dir, layout=None):
                 warn.append("%s ROTATION=%s: only the first number (heading) is "
                             "applied, the other two are not" % (f, rot))
         path = os.path.join(track_dir, f)
-        if os.path.exists(path):
-            out.append((path, place))
+        if not os.path.isfile(path):
+            raise SourceFormatError("%s: [%s] referenced model is missing: %s" % (ini, sec, path))
+        out.append((path, place))
+    if not out and os.path.isfile(ini):
+        raise SourceFormatError("%s: no MODEL_ sections; unsupported or empty model list" % ini)
     if not out and os.path.exists(os.path.join(track_dir, folder + ".kn5")):
         out = [(os.path.join(track_dir, folder + ".kn5"), None)]
+    if not out:
+        raise SourceFormatError("%s: no model list or matching track KN5 found" % track_dir)
     return out, root, warn
 
 
@@ -892,28 +876,8 @@ def upward_fraction(node, samples=200):
 
 def racing_line(track_dir):
     """AC's own lap line, used to tell driving surfaces from scenery."""
-    path = os.path.join(track_dir, "ai", "fast_lane.ai")
-    if not os.path.exists(path) or os.path.getsize(path) < 64:
-        return []
-    with open(path, "rb") as f:
-        d = f.read()
-    ver, count, _a, _b = struct.unpack_from("<4i", d, 0)
-    if ver != 7 or count <= 0 or 16 + count * 20 > len(d):
-        return []
-    step = max(1, count // 400)
-    return [struct.unpack_from("<3f", d, 16 + i * 20)
-            for i in range(0, count, step)]
-
-
-def read_ini(path):
-    cp = configparser.ConfigParser(strict=False, interpolation=None)
-    cp.optionxform = str
-    try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            cp.read_file(f)
-    except FileNotFoundError:
-        pass
-    return cp
+    points = read_fast_lane_file(os.path.join(track_dir, "ai", "fast_lane.ai"))
+    return points[::max(1, len(points) // 400)]
 
 
 def load_surfaces(track_dir, ac_root):
@@ -928,14 +892,19 @@ def load_surfaces(track_dir, ac_root):
         for sec in cp.sections():
             if not sec.startswith("SURFACE_"):
                 continue
-            key = cp[sec].get("KEY", "").strip()
-            if not key:
-                continue
-            out[key] = {
-                "friction": float(cp[sec].get("FRICTION", "1.0") or 1.0),
-                "valid": cp[sec].get("IS_VALID_TRACK", "0").strip() == "1",
-                "pitlane": cp[sec].get("IS_PITLANE", "0").strip() == "1",
-            }
+            key = ini_required(path, cp[sec], "KEY")
+            friction = ini_number(path, cp[sec], "FRICTION", 1.0)
+            if friction < 0:
+                raise SourceFormatError("%s: [%s] FRICTION must be nonnegative" % (path, sec))
+            flags = {}
+            for flag in ("IS_VALID_TRACK", "IS_PITLANE"):
+                value = cp[sec].get(flag, "0").strip()
+                if value not in ("0", "1"):
+                    raise SourceFormatError("%s: [%s] invalid %s=%r; expected 0 or 1" %
+                                            (path, sec, flag, value))
+                flags[flag] = value == "1"
+            out[key] = {"friction": friction, "valid": flags["IS_VALID_TRACK"],
+                        "pitlane": flags["IS_PITLANE"]}
     return out
 
 
@@ -975,28 +944,13 @@ def write(path, text):
 def extract_textures(kn5_paths, tex_dir, names):
     n = 0
     for path in kn5_paths:
-        if not os.path.exists(path):
-            continue
-        with open(path, "rb") as f:
-            d = f.read()
-        p = 6
-        ver = struct.unpack_from("<I", d, p)[0]
-        p += 4
-        if ver > 5:
-            p += 4  # v6 extra is metadata, not a byte count
-        cnt = struct.unpack_from("<I", d, p)[0]
-        p += 4
-        for _ in range(cnt):
-            p += 4
-            ln = struct.unpack_from("<I", d, p)[0]
-            p += 4
-            name = d[p:p + ln].decode("utf-8", "replace")
-            p += ln
-            size = struct.unpack_from("<I", d, p)[0]
-            p += 4
-            with open(os.path.join(tex_dir, names.get(name, name)), "wb") as o:
-                o.write(d[p:p + size])
-            p += size
+        for name, _kind, blob in iter_textures(path):
+            filename = names.get(name, name)
+            if (not filename or filename in (".", "..") or
+                    any(c in filename for c in '/\\:')):
+                raise SourceFormatError("%s: unsafe extracted texture filename %r" % (path, filename))
+            with open(os.path.join(tex_dir, filename), "wb") as stream:
+                stream.write(blob)
             n += 1
     return n
 
@@ -1082,12 +1036,12 @@ def main():
     unmatched = defaultdict(int)
 
     for model_index, path in enumerate(kn5_paths):
-        if not os.path.exists(path):
-            print("  skip missing %s" % os.path.basename(path))
-            continue
         k = KN5(path, geometry=True, placement=placed.get(path))
         print("%s: %d materials, %d textures, version %d"
               % (os.path.basename(path), len(k.materials), len(k.textures), k.version))
+        for shader in unknown_shaders(k.materials):
+            print("   WARNING %s: unrecognized source shader %r; generic material "
+                  "approximation, appearance unverified" % (path, shader))
         for mesh_id, n in model_meshes(k, model_index):
             mat = k.materials[n.material_id]
             key, physical = surface_for_mesh(n.name, list(surfaces.keys()))
@@ -1182,8 +1136,6 @@ def main():
     uv_seen = {}
     mat_of_mesh = {mesh_key(m): m["material_id"] for m in mesh_rows}
     for model_index, path in enumerate(kn5_paths):
-        if not os.path.exists(path):
-            continue
         model = KN5(path, geometry=True, placement=placed.get(path))
         for mesh_id, n in model_meshes(model, model_index):
             if mesh_id in want_points:

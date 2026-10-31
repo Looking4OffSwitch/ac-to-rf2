@@ -11,13 +11,13 @@ applied here.
 """
 import os
 import math
-import struct
 import json
 import argparse
 
 import numpy as np
 
 from kn5 import KN5
+from source_formats import read_fast_lane_file
 
 BINS = 144
 INSET = 0.55          # fraction of the road radius the path sits at
@@ -82,25 +82,8 @@ def yaw_of(m):
 
 
 def read_fast_lane(track_dir):
-    """AC's own racing line, if the track ships one.
-
-    Layout is a four int header then one record per point: position, distance
-    along the lap, and an index. Tracks with no AI, such as drift pads, ship a
-    stub of a few bytes and fall back to a generated loop.
-    """
-    path = os.path.join(track_dir, "ai", "fast_lane.ai")
-    if not os.path.exists(path) or os.path.getsize(path) < 64:
-        return []
-    with open(path, "rb") as f:
-        d = f.read()
-    ver, count, _lap, _samples = struct.unpack_from("<4i", d, 0)
-    if ver not in (7,) or count <= 0 or 16 + count * 20 > len(d):
-        return []
-    pts = []
-    for i in range(count):
-        x, y, z = struct.unpack_from("<3f", d, 16 + i * 20)
-        pts.append((x, y, z))
-    return pts
+    """Missing or explicitly empty AI falls back; unsupported/corrupt AI fails."""
+    return read_fast_lane_file(os.path.join(track_dir, "ai", "fast_lane.ai"))
 
 
 def resample_line(pts, spacing):

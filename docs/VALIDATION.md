@@ -43,3 +43,10 @@ prove the appearance in the renderer.
    mip/filter settings, then isolate detail colour, normal mapping, and specular
    response one at a time. Do not change texture density, contrast, and lighting
    together or treat passing file checks as a visual sign-off.
+
+## Source format changes
+
+See [format compatibility](FORMATS.md) for supported versions, empty-AI fallback,
+validation rules, and the process for adding a new layout. Unsupported binary
+versions and malformed present sources fail; unknown optional INI keys remain
+compatible. Source-format tests run with `pytest -q` without either game.

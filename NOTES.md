@@ -1258,3 +1258,96 @@ measurements validate serialized files, not the rendered appearance. A fixed
 camera/time/weather comparison in rF2 against AC+CSP is still required for the
 near-car road band and any remaining lighting or texture defects. See
 docs/VALIDATION.md for the concrete next steps.
+
+## 2026-10-31: source format validation and parser hardening
+
+### Failure measurements before the change
+
+Generated probes showed the previous reader accepting a KN5 header declaring
+version 7 while interpreting it as version 6, accepting 22 unexplained bytes
+after a complete KN5 node tree, and returning an empty racing line for AI
+version 8. The latter silently selected generated-path behavior. Short strings
+and skipped payloads were not checked at their point of consumption. The
+texture scanners duplicated the KN5 prefix layout.
+
+Before enforcing EOF rules, 42 installed stock KN5s were scanned across Laguna
+Seca (10), Highlands (13), Silverstone (13), and Spa (6). All declared version 6
+and consumed the entire file; none had trailing bytes. Nine stock racing lines
+all declared version 7 and had matching point/extra counts and spatial grids.
+Their valid data after the main points ranged from 729004 to 6692444 bytes;
+rejecting all data after the position table would break these tracks.
+The installed stock drift track has exactly 12 bytes representing three int32s
+(3, 0, 0). This is an explicitly empty older-format stub, not an arbitrary
+short-file exemption. The handling is generic and does not inspect track names.
+
+### Implemented contract
+
+source_formats.Reader checks every read/skip and derives count bounds from
+remaining file bytes and minimum record size. SourceFormatError identifies the
+file, binary format/version, record context, and byte offset. KN5 accepts only
+versions 5 and 6; the header and texture table are shared by the model reader,
+alpha scanner, and extractor. The full reader rejects unexplained trailing
+bytes, invalid modes/booleans, ambiguous definitions, non-triangle index counts,
+invalid vertex/material references, and non-finite consumed geometry/material
+values. This validation also runs with lazy decoding or geometry=False.
+Nesting above 256 parent levels is rejected explicitly (stock maximum: 3).
+NumPy views validate geometry without decoding it into large Python lists.
+
+Both AI consumers now use the same version-7 reader. It validates all main
+20-byte records, matching extras and their full 72-byte records, and the
+optional grid's nested counts/lengths before requiring EOF. Missing files,
+complete empty v7 files, and the exact empty v3 stub permit generated-line
+fallback; present empty representations warn. Other present unsupported,
+zero-length, or truncated AI files fail. Unused extra fields and grid references
+are bounds-checked but their values are not interpreted.
+
+Recognized model/surface/camera INI records now validate required keys, finite
+numbers and vector shapes; missing declared models and requested layout lists
+fail instead of silently dropping geometry. Existing optional surface defaults
+remain, and unknown INI sections/keys remain compatible. Binary names use
+strict UTF-8; INI also accepts a BOM. Unsupported encodings fail rather than
+silently replacing bytes. Unknown source shaders warn that the generic mapping
+is an unverified approximation; this does not change material rendering policy.
+Texture extraction also rejects output path separators and drive syntax.
+See docs/FORMATS.md for the supported layouts and extension policy.
+
+### Validation measurements
+
+All 99 local regression cases pass (74 new cases), including the real Blender
+5.0 exporter and Blender 5.2 geometry smoke tests. The generated KN5 fixture is
+571 bytes and the grid-bearing AI fixture is 352 bytes. Every truncation from
+zero through one byte short is rejected with SourceFormatError: 923 truncation
+positions exercised. Cases cover unknown versions, bad counts/references,
+non-finite geometry, duplicate definitions, invalid text and required INI fields,
+valid extra sections, short headings, explicit empty AI and unsupported shaders.
+A pipeline regression confirms that unsupported KN5 input stops before later
+stages/export/install and leaves an existing location sentinel unchanged.
+pip check reports no broken requirements.
+
+Compared with the previous committed readers (f3e7fe1), the installed four-track
+sample preserves all decoded model metadata/materials, all 1055 embedded texture
+payloads byte-for-byte, all 31765 points across nine racing lines, and all 514
+camera records. Nine model/layout INIs also validate. The combined old/new
+comparison took 8.348 seconds locally; this is an observed validation run, not a
+performance guarantee. All nine spatial grids are consumed exactly.
+
+A fresh Laguna Seca source conversion with --textures completed: 1603 meshes,
+244 physical, 122 material variants, 17 surface blocks and 216 extracted
+textures. The existing unmatched RDGRAVEL008 surface warning remains. No game
+location was replaced and no game assets are committed. Parser checks do not
+constitute an in-game visual sign-off or prove every possible CSP/image format.
+A semantic change that preserves the binary version can still require new
+measurements and explicit support.
+
+### Format references checked
+
+The upstream AcTools reader describes the KN5 prefix, 44/76-byte vertices,
+material modes and node tails. Its AI reader and structures describe the
+20-byte points, 72-byte extras, and nested spatial grid. The measured stock
+files agree with these layouts. References were read at AcTools commit
+e5e5c94b8dee7511def0b670bfd5dbb233831c11:
+
+- https://github.com/gro-ove/actools/blob/e5e5c94b8dee7511def0b670bfd5dbb233831c11/AcTools/Kn5File/Kn5Basic.cs
+- https://github.com/gro-ove/actools/blob/e5e5c94b8dee7511def0b670bfd5dbb233831c11/AcTools/AiFile/AiSpline.cs
+- https://github.com/gro-ove/actools/blob/e5e5c94b8dee7511def0b670bfd5dbb233831c11/AcTools/AiFile/AiPointExtra.cs
+- https://github.com/gro-ove/actools/blob/e5e5c94b8dee7511def0b670bfd5dbb233831c11/AcTools/AiFile/AiSplineGrid.cs

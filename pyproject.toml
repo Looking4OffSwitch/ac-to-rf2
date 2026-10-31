@@ -22,7 +22,7 @@ ac2rf2-verify = "verify_install:main"
 [tool.setuptools]
 py-modules = ["blender_paths", "setup_tools", "backdrop", "bake_layers", "blender_stage", "build_track",
   "check_setup", "convert_track", "finalize_track", "fix_textures", "kn5",
-  "make_aiw", "make_cam", "parallel", "scene_contract", "steam_paths",
+  "source_formats", "make_aiw", "make_cam", "parallel", "scene_contract", "steam_paths",
   "terrain", "material_policy", "install_location", "exporter_support", "verify_install"]
 
 [tool.pytest.ini_options]
