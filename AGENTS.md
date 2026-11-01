@@ -1,7 +1,7 @@
 # Working on ac-to-rf2
 
 Instructions for AI coding assistants, and for people, changing this converter.
-Read `README.md` first for what it does and the pipeline. Read `NOTES.md`
+Read `README.md` first for what it does and the pipeline. Read `docs/NOTES.md`
 before changing how materials, lighting or textures are translated: it records
 every finding with the measurement behind it, including approaches that were
 tried and reverted.
@@ -10,22 +10,22 @@ tried and reverted.
 
 - Find the cause and prove it with a measurement before changing anything (a
   value read from the kn5 or a texture, a log line, a timing). Don't tune
-  numbers by rebuilding and looking. Add what you measured to `NOTES.md`.
+  numbers by rebuilding and looking. Add what you measured to `docs/NOTES.md`.
 - Keep fixes generic. The converter reads what each AC track declares
   (`models*.ini`, `surfaces.ini`, CSP config); don't add special cases for one
   track.
 - Assetto Corsa with Custom Shaders Patch is the visual reference.
 - Some mod tracks are deliberately scrambled (`ek_nagao`). Don't try to break
-  that protection; see the README section on scrambled tracks.
+  that protection; see the scrambled-track guidance in docs/USAGE.md.
 - Never commit converted track content. `out/` is ignored by git for that
   reason.
 
 ## Running it
 
 ```
-python check_setup.py
-python build_track.py "<AC track folder>" [--layout <name>] [--hour HH:MM] [--install auto]
-python verify_install.py "<rF2>\ModDev\Locations\<track>" out\<track>
+ac2rf2-check
+ac2rf2 "<AC track folder>" [--layout <name>] [--hour HH:MM] [--install auto]
+ac2rf2-verify "<rF2>\ModDev\Locations\<track>" out\<track>
 ```
 
 - Without `--install` a build stays in `out\<track>`; with it, it also replaces
@@ -58,5 +58,8 @@ python verify_install.py "<rF2>\ModDev\Locations\<track>" out\<track>
   it").
 
 ## Files
+
+- Application code belongs in `src/ac_to_rf2`; probes in `tools/probes`.
+- Keep the root README concise; detailed documentation belongs in `docs/`.
 
 - Keep each file's existing line endings. `convert.bat` must stay CRLF.

@@ -2,11 +2,12 @@
 import json
 from pathlib import Path
 import sys
+import os
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.append(os.environ.get("AC2RF2_TEST_IMPORT_ROOT", str(Path(__file__).resolve().parents[1] / "src")))
 import bpy
 from mathutils import Matrix
-import blender_stage
+from ac_to_rf2 import blender_stage
 
 assert bpy.app.version >= (5, 2, 0), bpy.app.version_string
 # Supply only the add-on's object tag; all geometry/normals/UV operations below

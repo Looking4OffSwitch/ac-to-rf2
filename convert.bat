@@ -8,10 +8,15 @@ rem For a track with several layouts, drag the folder and then type the layout
 rem when asked (for example: gp). Press Enter for the default, if it has one.
 setlocal
 set "HERE=%~dp0"
+if not defined AC2RF2_WORKSPACE set "AC2RF2_WORKSPACE=%HERE%"
 if "%~1"=="" (
   echo Drag an Assetto Corsa track folder onto convert.bat.
   pause
   exit /b 1
+)
+rem Use the project's standard virtual environment for drag-and-drop launches.
+if not defined VIRTUAL_ENV (
+  if exist "%HERE%.venv\Scripts\activate.bat" call "%HERE%.venv\Scripts\activate.bat"
 )
 rem Windows can put a "python" on PATH that only opens the Microsoft Store, so
 rem run it rather than just looking for it.
@@ -19,6 +24,12 @@ python -c "import sys" >nul 2>nul
 if errorlevel 1 (
   echo Python was not found. Install Python 3.10 or newer from python.org and
   echo tick "Add python.exe to PATH" in the installer, then try again.
+  pause
+  exit /b 1
+)
+python -c "import ac_to_rf2" >nul 2>nul
+if errorlevel 1 (
+  echo Activate .venv and run: python -m pip install -e .
   pause
   exit /b 1
 )
@@ -34,9 +45,9 @@ echo.
 echo Converting "%~nx1"  -- this takes about 5 to 15 minutes, Blender does most of it.
 echo.
 if defined LAYOUT (
-  python "%HERE%build_track.py" "%~1" --install auto --layout "%LAYOUT%"
+  python -m ac_to_rf2.build_track "%~1" --install auto --layout "%LAYOUT%"
 ) else (
-  python "%HERE%build_track.py" "%~1" --install auto
+  python -m ac_to_rf2.build_track "%~1" --install auto
 )
 if errorlevel 1 (
   echo.

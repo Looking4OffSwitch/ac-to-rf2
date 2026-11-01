@@ -16,8 +16,8 @@ import argparse
 
 import numpy as np
 
-from kn5 import KN5
-from source_formats import read_fast_lane_file
+from ac_to_rf2.kn5 import KN5
+from ac_to_rf2.source_formats import read_fast_lane_file
 
 BINS = 144
 INSET = 0.55          # fraction of the road radius the path sits at
@@ -662,7 +662,7 @@ def build_pitlane(wps, ground):
 
 
 def build(track_dir, out_path, layout):
-    import convert_track
+    from ac_to_rf2 import convert_track
     # A real circuit is split across several model files; reading only the
     # first picks up whichever happens to sort first, often a prop file.
     paths, layout_root, _warn = convert_track.layout_files(track_dir, layout)

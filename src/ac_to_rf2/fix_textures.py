@@ -16,8 +16,8 @@ import struct
 import argparse
 import subprocess
 
-from steam_paths import TEXCONV  # in whichever Steam library has rF2
-from parallel import default_jobs, ordered_map
+from ac_to_rf2.steam_paths import TEXCONV  # in whichever Steam library has rF2
+from ac_to_rf2.parallel import default_jobs, ordered_map
 BLOCK = (b"DXT1", b"DXT3", b"DXT5", b"BC4U", b"BC5U", b"ATI1", b"ATI2")
 
 # Rebuilding a block compressed texture means decoding and recompressing it, so

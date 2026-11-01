@@ -5,7 +5,7 @@ which is why our alpha reference is stored and never applied. The addon
 exposes texture flags under several plausible names; try each on its own
 mesh and report which one actually moves the bit in the exported gmt.
 
-blender --background --factory-startup --python probe_colorkey.py -- <tex_dir> <out_dir>
+blender --background --factory-startup --python tools/probes/probe_colorkey.py -- <tex_dir> <out_dir>
 """
 import os
 import sys

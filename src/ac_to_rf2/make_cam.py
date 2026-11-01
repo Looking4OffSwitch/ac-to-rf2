@@ -12,7 +12,7 @@ import re
 import math
 import glob
 import argparse
-from source_formats import read_ini, ini_required, ini_vector, ini_number, SourceFormatError
+from ac_to_rf2.source_formats import read_ini, ini_required, ini_vector, ini_number, SourceFormatError
 
 HEAD = "//[[gMa1.002f (c)2015    ]] [[ converted from Assetto Corsa ]]\n"
 

@@ -5,14 +5,14 @@ checks here read the files rF2 will actually load and compare them against the
 material map, rather than searching for a value somewhere in the neighbourhood
 and calling a coincidence a confirmation.
 
-    python verify_install.py "<rF2>\\ModDev\\Locations\\<track>" out/<track>
+    ac2rf2-verify "<rF2>\\ModDev\\Locations\\<track>" out/<track>
 """
 import os
 import re
 import sys
 import json
 import struct
-from scene_contract import index_meshes, mesh_key, validate_exports
+from ac_to_rf2.scene_contract import index_meshes, mesh_key, validate_exports
 
 # Measured by exporting one mesh twice with different thresholds and diffing:
 # exactly one byte moved. From the START of the texture name, not the end --

@@ -3,11 +3,11 @@ import struct
 
 import pytest
 
-import convert_track as ct
-from kn5 import KN5, MAX_NODE_DEPTH, iter_textures
-from make_aiw import read_fast_lane
-from make_cam import read_cameras
-from source_formats import SourceFormatError, read_fast_lane_file, read_ini
+from ac_to_rf2 import convert_track as ct
+from ac_to_rf2.kn5 import KN5, MAX_NODE_DEPTH, iter_textures
+from ac_to_rf2.make_aiw import read_fast_lane
+from ac_to_rf2.make_cam import read_cameras
+from ac_to_rf2.source_formats import SourceFormatError, read_fast_lane_file, read_ini
 from test_regressions import kn5_file, material, mesh_bytes, string, u32
 
 
@@ -308,8 +308,8 @@ def test_unknown_rendering_shader_warns_without_changing_known_mapping(tmp_path,
 
 
 def test_pipeline_stops_before_export_or_install_on_unsupported_source(tmp_path, monkeypatch):
-    import build_track
-    import check_setup
+    from ac_to_rf2 import build_track
+    from ac_to_rf2 import check_setup
     from test_regressions import terrain_template
     track = tmp_path / "track"
     track.mkdir()
@@ -321,9 +321,9 @@ def test_pipeline_stops_before_export_or_install_on_unsupported_source(tmp_path,
     sentinel.write_bytes(b"existing location")
     commands = []
     def run_source_only(command, **kwargs):
-        commands.append(command[1])
-        assert command[1] == "convert_track.py", "Later stages must never run"
-        monkeypatch.setattr("sys.argv", command[1:] + ["--out", str(tmp_path / "out"),
+        commands.append(command[2])
+        assert command[1:3] == ["-m", "ac_to_rf2.convert_track"], "Later stages must never run"
+        monkeypatch.setattr("sys.argv", [command[2]] + command[3:] + ["--out", str(tmp_path / "out"),
             "--ac-root", str(tmp_path), "--tdf-template", str(terrain_template(tmp_path))])
         ct.main()
     monkeypatch.setattr(check_setup, "check", lambda *args, **kwargs: True)
@@ -331,6 +331,6 @@ def test_pipeline_stops_before_export_or_install_on_unsupported_source(tmp_path,
     monkeypatch.setattr("sys.argv", ["ac2rf2", str(track), "--install", str(installed.parent)])
     with pytest.raises(SourceFormatError, match="unsupported version"):
         build_track.main()
-    assert commands == ["convert_track.py"]
+    assert commands == ["ac_to_rf2.convert_track"]
     assert sentinel.read_bytes() == b"existing location"
     assert list(installed.iterdir()) == [sentinel]

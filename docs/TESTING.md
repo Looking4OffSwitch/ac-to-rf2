@@ -22,8 +22,8 @@ root as its working directory. It checks that the actual Mod Mode process stays
 running for at least two seconds. A regular-game process or a launch timeout is
 an error. Process confirmation does not prove that the track renders correctly.
 
-The Python script is `drive_track.py`; `python drive_track.py ...` accepts the
-same arguments as the installed `ac2rf2-test` command.
+The implementation is `src/ac_to_rf2/drive_track.py`. The equivalent module
+command is `python -m ac_to_rf2.drive_track ...`; installed commands are unchanged.
 
 Select `ks_laguna_seca` in the game's track list. First-time Developer Mode
 graphics/controller setup belongs to its separate profile. Steam should be

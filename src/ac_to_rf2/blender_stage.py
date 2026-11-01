@@ -1,7 +1,7 @@
 """Geometry stage: AC kn5 -> Blender -> rFactor 2 .gmt
 
 Run headless:
-  blender --background --python blender_stage.py -- <material_map.json> <out_dir> [--limit N]
+  blender --background --python src/ac_to_rf2/blender_entry.py -- <material_map.json> <out_dir> [--limit N]
 
 Reads the mapping produced by convert_track.py, rebuilds every mesh in Blender
 with its rF2 material name, and exports one gmt per mesh using Traveller's
@@ -16,14 +16,11 @@ import json
 import bpy
 from mathutils import Matrix, Vector
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-if HERE not in sys.path:
-    sys.path.insert(0, HERE)
-from kn5 import KN5  # noqa: E402
-import backdrop  # noqa: E402
-from exporter_support import enable_exporter
-from scene_contract import model_meshes, index_meshes, SCHEMA_VERSION
-from material_policy import coefficient, opacity_mode, set_blending
+from ac_to_rf2.kn5 import KN5  # noqa: E402
+from ac_to_rf2 import backdrop  # noqa: E402
+from ac_to_rf2.exporter_support import enable_exporter
+from ac_to_rf2.scene_contract import model_meshes, index_meshes, SCHEMA_VERSION
+from ac_to_rf2.material_policy import coefficient, opacity_mode, set_blending
 
 ADDON = "io_rf2_gmt_release"
 

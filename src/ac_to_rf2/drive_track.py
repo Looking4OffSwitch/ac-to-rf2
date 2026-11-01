@@ -11,8 +11,8 @@ import sys
 
 import psutil
 
-from build_track import HERE, add_build_options
-from game_runtime import ensure_stopped, launch_developer
+from ac_to_rf2.build_track import HERE, add_build_options
+from ac_to_rf2.game_runtime import ensure_stopped, launch_developer
 
 
 @dataclass(frozen=True)
@@ -79,7 +79,7 @@ def targets_for(args, ac):
 
 
 def build_command(args, target, rf2, ac, out_root):
-    command = [sys.executable, str(Path(HERE) / "build_track.py"), str(target.source),
+    command = [sys.executable, "-m", "ac_to_rf2.build_track", str(target.source),
                "--install", str(rf2 / "ModDev" / "Locations"),
                "--rf2", str(rf2), "--ac", str(ac), "--out-root", str(out_root)]
     if target.layout:
@@ -93,7 +93,7 @@ def build_command(args, target, rf2, ac, out_root):
 
 
 def install_command(args, target, rf2, out_root):
-    return [sys.executable, str(Path(HERE) / "finalize_track.py"), str(out_root / target.venue),
+    return [sys.executable, "-m", "ac_to_rf2.finalize_track", str(out_root / target.venue),
             "--install", str(rf2 / "ModDev" / "Locations"), "--hour", args.hour,
             "--ambient", args.scene_ambient]
 
@@ -166,7 +166,7 @@ def main(argv=None):
         datetime.strptime(args.hour, "%H:%M")
     except ValueError:
         ap.error("--hour must be a valid HH:MM time")
-    import steam_paths
+    from ac_to_rf2 import steam_paths
     rf2 = Path(args.rf2 or os.environ.get("AC2RF2_RF2_DIR") or steam_paths.game_dir("rFactor 2")).resolve()
     ac = Path(args.ac or os.environ.get("AC2RF2_AC_DIR") or steam_paths.game_dir("assettocorsa")).resolve()
     out_root = Path(args.out_root).resolve()
@@ -187,7 +187,7 @@ def main(argv=None):
                     if not required.is_file():
                         raise ValueError("Incomplete build; missing " + str(required))
             else:
-                from convert_track import layout_models
+                from ac_to_rf2.convert_track import layout_models
                 layout_models(str(target.source), target.layout)
         execute(args, rf2, ac, out_root, targets)
     except (OSError, ValueError, RuntimeError, psutil.Error, subprocess.CalledProcessError) as exc:

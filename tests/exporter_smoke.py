@@ -3,14 +3,15 @@ import json
 from pathlib import Path
 import struct
 import sys
+import os
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.append(os.environ.get("AC2RF2_TEST_IMPORT_ROOT", str(Path(__file__).resolve().parents[1] / "src")))
 import bpy
-import blender_stage as bs
-from build_track import write_solid_texture
-from exporter_support import enable_exporter
-from material_policy import set_blending
-from verify_install import read_gmt
+from ac_to_rf2 import blender_stage as bs
+from ac_to_rf2.build_track import write_solid_texture
+from ac_to_rf2.exporter_support import enable_exporter
+from ac_to_rf2.material_policy import set_blending
+from ac_to_rf2.verify_install import read_gmt
 
 output = Path(sys.argv[sys.argv.index("--") + 1]).resolve()
 output.mkdir(parents=True, exist_ok=True)

@@ -1,6 +1,6 @@
 """Check that everything a conversion needs is in place, before it starts.
 
-    python check_setup.py ["<AC track folder>"] [--layout <name>]
+    ac2rf2-check ["<AC track folder>"] [--layout <name>]
                           [--blender <path>] [--rf2 <folder>] [--ac <folder>]
 
 build_track.py runs the same checks first, so a missing piece is reported in a
@@ -11,7 +11,9 @@ import shutil
 import subprocess
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+from ac_to_rf2.project_paths import WORKSPACE_DIR, IMPORT_ROOT
+
+HERE = str(WORKSPACE_DIR)
 ADDON = "io_rf2_gmt_release"
 ADDON_PAGE = ("https://forum.studio-397.com/index.php?threads/"
               "blender-rfactor2-export-scripts.74821/")
@@ -22,15 +24,15 @@ MIN_FREE_GB = 10
 # tests whether the exporter's Python bytecode matches this Blender.
 PROBE = (
     "import sys, bpy\n"
-    "sys.path.insert(0, %r)\n"
+    "sys.path.append(%r)\n"
     "print('AC2RF2 VERSION', bpy.app.version_string)\n"
-    "from exporter_support import enable_exporter\n"
+    "from ac_to_rf2.exporter_support import enable_exporter\n"
     "try:\n"
     "    name, m = enable_exporter()\n"
     "    print('AC2RF2 ADDON', name, m.bl_info.get('version'))\n"
     "except Exception as exc:\n"
     "    print('AC2RF2 ERROR', str(exc))\n"
-    "sys.stdout.flush()\n" % HERE
+    "sys.stdout.flush()\n" % str(IMPORT_ROOT)
 )
 
 
@@ -125,7 +127,7 @@ def check_blender(rep, blender):
 def check(track_dir=None, layout=None, blender=None, install=None,
           need_blender=True):
     """Print one line per check; True when nothing is missing."""
-    import steam_paths
+    from ac_to_rf2 import steam_paths
     rep = Report()
     print("checking setup")
 
@@ -201,9 +203,9 @@ def main():
     if args.ac:
         os.environ["AC2RF2_AC_DIR"] = os.path.abspath(args.ac)
     if not args.blender:
-        from build_track import BLENDER
+        from ac_to_rf2.build_track import BLENDER
         args.blender = BLENDER
-    import steam_paths
+    from ac_to_rf2 import steam_paths
     ok = check(args.track_dir, args.layout, args.blender, steam_paths.LOCATIONS)
     if ok:
         print("\nall good")

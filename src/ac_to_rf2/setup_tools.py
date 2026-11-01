@@ -7,7 +7,7 @@ import tempfile
 import urllib.request
 import zipfile
 
-from blender_paths import ADDONS_DIR, BLENDER_VERSION, PORTABLE_BLENDER, TOOLS_DIR
+from ac_to_rf2.blender_paths import ADDONS_DIR, BLENDER_VERSION, PORTABLE_BLENDER, TOOLS_DIR
 
 
 BLENDER_ARCHIVE = "blender-%s-windows-x64.zip" % BLENDER_VERSION

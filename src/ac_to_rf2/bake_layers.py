@@ -31,8 +31,8 @@ import subprocess
 
 import numpy as np
 
-from steam_paths import TEXCONV  # in whichever Steam library has rF2
-from parallel import default_jobs, ordered_map
+from ac_to_rf2.steam_paths import TEXCONV  # in whichever Steam library has rF2
+from ac_to_rf2.parallel import default_jobs, ordered_map
 CHANNELS = ("R", "G", "B", "A")
 
 # Resizing or building mips, texconv filters colour weighted by alpha unless
@@ -1494,7 +1494,7 @@ def main():
             print("   %-28s x%.2f  (albedo %s)" % (k[:28], scale, lums.get(k)))
     data["no_alpha_test"] = sorted(k for k, v in refs.items() if v is None)
     data["gradients"] = sorted(k for k, v in refs.items() if v == GRADIENT)
-    from material_policy import opacity_mode
+    from ac_to_rf2.material_policy import opacity_mode
     for row in data["meshes"]:
         row["opacity_mode"] = opacity_mode(row, data)
     print("alpha tests: %d hard cut-outs at %d, alpha remapped from AC's own "

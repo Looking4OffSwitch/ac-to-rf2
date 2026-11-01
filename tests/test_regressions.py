@@ -6,14 +6,14 @@ from types import SimpleNamespace
 
 import pytest
 
-import convert_track as ct
-import fix_textures
-from install_location import install_location
-from kn5 import KN5
-from material_policy import coefficient, opacity_mode, set_blending
-from scene_contract import (MaterialNames, index_meshes, model_meshes,
+from ac_to_rf2 import convert_track as ct
+from ac_to_rf2 import fix_textures
+from ac_to_rf2.install_location import install_location
+from ac_to_rf2.kn5 import KN5
+from ac_to_rf2.material_policy import coefficient, opacity_mode, set_blending
+from ac_to_rf2.scene_contract import (MaterialNames, index_meshes, model_meshes,
                             surface_prefix, validate_exports)
-from terrain import surface_tdf
+from ac_to_rf2.terrain import surface_tdf
 
 
 def u32(n):
@@ -227,7 +227,7 @@ def test_failed_copy_keeps_existing_install(tmp_path, monkeypatch):
     (dest / "old").write_text("working")
     def denied(*a, **k):
         raise PermissionError("fixture denied")
-    monkeypatch.setattr("install_location.shutil.copytree", denied)
+    monkeypatch.setattr("ac_to_rf2.install_location.shutil.copytree", denied)
     with pytest.raises(PermissionError):
         install_location(stage, dest)
     assert (dest / "old").read_text() == "working"
@@ -235,7 +235,7 @@ def test_failed_copy_keeps_existing_install(tmp_path, monkeypatch):
 
 
 def test_failed_publish_rolls_back_and_success_replaces(tmp_path, monkeypatch):
-    import install_location as module
+    from ac_to_rf2 import install_location as module
     stage, dest = tmp_path / "stage", tmp_path / "venue"
     stage.mkdir(); dest.mkdir()
     (stage / "new").write_text("replacement")
@@ -278,7 +278,7 @@ def test_mapping_joins_duplicate_nodes_and_surface_variants_end_to_end(tmp_path,
 
 def test_exporter_loader_rejects_older_blender_and_missing_addon(monkeypatch):
     import sys
-    import exporter_support
+    from ac_to_rf2 import exporter_support
     app = SimpleNamespace(version=(4, 5, 0), version_string="4.5.0")
     monkeypatch.setitem(sys.modules, "bpy", SimpleNamespace(app=app))
     monkeypatch.setitem(sys.modules, "addon_utils", SimpleNamespace(enable=lambda *a, **k: None))

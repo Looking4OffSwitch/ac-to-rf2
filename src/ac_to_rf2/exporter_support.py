@@ -1,6 +1,6 @@
 """Load a current rF2 exporter in Blender; never accept an incompatible import."""
 import sys
-from blender_paths import ADDONS_DIR
+from ac_to_rf2.blender_paths import ADDONS_DIR
 
 
 MIN_BLENDER = (5, 0, 0)

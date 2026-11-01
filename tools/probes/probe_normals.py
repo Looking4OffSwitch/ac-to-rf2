@@ -15,18 +15,19 @@ blender_stage.build_mesh with each mode, plus mode 0 with AC normals, and
 reads the normals back from the vertex block of each gmt. The vertex record
 is position (3 floats) followed by the normal (3 floats), written as x, z, y.
 
-blender --background --factory-startup --python probe_normals.py -- <tex_dir> <out_dir>
+blender --background --factory-startup --python tools/probes/probe_normals.py -- <tex_dir> <out_dir>
 """
 import os
+from pathlib import Path
 import sys
 import math
 import struct
 
 import bpy
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = str(Path(__file__).resolve().parents[2] / "src")
 sys.path.insert(0, HERE)
-import blender_stage as bs  # noqa: E402
+from ac_to_rf2 import blender_stage as bs  # noqa: E402
 
 args = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
 TEX_DIR = args[0]

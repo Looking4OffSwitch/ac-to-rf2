@@ -10,7 +10,7 @@ import struct, sys, os, math
 
 import numpy as np
 
-from source_formats import Reader
+from ac_to_rf2.source_formats import Reader
 
 SUPPORTED_VERSIONS = (5, 6)
 MAX_NODE_DEPTH = 256

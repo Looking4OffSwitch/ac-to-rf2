@@ -1439,3 +1439,84 @@ layout argument and Developer Mode destination, without changing processes.
 All 128 regression cases pass after the final CLI checks. The source-format and
 real Blender tests remain included. Launch/restart regression tests simulate
 processes; the user retains the final in-game visual test.
+
+## 2026-11-01: standard src package layout and clean repository root
+
+### Baseline and migration
+
+The previous layout had 27 Python files at the repository root: 24 runtime
+modules plus three standalone probes. Normal subprocesses launched bare .py
+filenames relative to that root; Blender injected it into sys.path; portable
+tooling defaults were relative to the module file. Simply moving the files
+would therefore break stage execution and tool discovery.
+
+Application code now lives in src/ac_to_rf2, using qualified package imports and
+Python -m subprocesses. A small packaged blender_entry.py supplies Blender's
+separate interpreter with the correct import root. project_paths.py separates
+installed code from writable files: editable checkouts retain their original
+out/ and .tools/ defaults even from another current directory; wheel installs
+use the caller's directory, with AC2RF2_WORKSPACE as an explicit override.
+AC2RF2_TOOLS_DIR and --out-root continue to work.
+
+All five ac2rf2* console command names are preserved. Root-file Python invocations
+become console commands or python -m ac_to_rf2.<module>; python -m ac_to_rf2
+also runs the main converter. The retained root convert.bat activates the local
+standard .venv when needed and invokes the package, with CRLF preserved.
+Probes moved to tools/probes with their path references updated.
+
+Detailed notes and work items moved into docs/. The root README was reduced from
+305 to 64 lines, with its complete previous guide preserved as docs/USAGE.md.
+The requested README work item is marked complete. docs/DEVELOPMENT.md documents
+the layout, source-command migration, package builds, workspace rules and tests.
+There are zero root-level Python files; application sources, tests, diagnostics
+and documentation have separate directories. No source game data was moved.
+
+### Blender / wheel ABI regression measured and fixed
+
+Blender 5.0.1's Python 3.11 starts without NumPy preloaded. Prepending this
+project's Python 3.14 site-packages made it select NumPy 2.5.4's cp314 extension
+and fail with ImportError (no numpy._core._multiarray_umath). This would affect a
+wheel's Blender entry even though an editable src checkout worked.
+
+The Blender bootstrap and setup probe now append the package import root after
+Blender's own libraries, preserving its bundled NumPy. The entry also rejects
+an already-importable conflicting ac_to_rf2 package instead of using stale code.
+A new regression copies the package into a wheel-style site-packages directory,
+places a deliberately failing foreign NumPy beside it, and runs the actual
+Blender entry on a generated KN5/map/DDS. The test failed before the change
+with 'foreign virtualenv NumPy was loaded' and now exports a valid GMT. The
+existing actual-exporter colour/blend/alpha/custom-normal and Blender 5.2 API
+smoke tests also still pass. No binary dependencies were copied into Blender.
+
+### Functionality and distribution validation
+
+All 138 local cases pass (128 previous cases plus 10 package-layout cases).
+New checks cover unrelated-directory module commands, the verifier, editable
+workspace defaults, explicit workspace overrides, wheel-style writable defaults,
+and the real Blender/wheel import boundary. pip check reports no broken
+requirements; ac2rf2-check still finds Blender 5.0.1 and exporter R25.11.27.
+
+Both wheel and source distributions build. tools/check_distribution.py installs
+the wheel in a fresh virtual environment, removes checkout import-path overrides,
+loads all five installed entry points, runs command help outside the checkout,
+checks that output/tool defaults point outside site-packages, and rebuilds a
+wheel from the source archive. It rejects stale flat modules in the wheel and
+checks that the sdist includes source, docs, tests, probes and the batch launcher,
+while excluding out/, .venv/ and .tools/. CI now performs these checks on both
+Windows/Python 3.10 and 3.14. Python packaging follows the documented src layout:
+https://packaging.python.org/en/latest/tutorials/packaging-projects/ and
+https://setuptools.pypa.io/en/latest/userguide/package_discovery.html .
+
+A full stock Laguna build using the packaged stages and four Blender workers
+completed all seven steps into out/_layout_validation/ks_laguna_seca. It did NOT
+install over the user's location or launch the game. It produced 1124 GMTs,
+275 textures, 592 waypoints over 3553.2 m, 24 grid/pit slots and 41 cameras.
+Subsequent ac2rf2-verify returned zero: no missing textures, 196 correct cutout
+checks, 157 upright meshes with no constant-up error, no default 1000 m ranges,
+and 723 shadow casters. The existing RDGRAVEL008 source-surface warning remains.
+
+Compared with the previous completed out/ks_laguna_seca build, all 280 non-GMT
+layout files (275 textures plus scene/database/AI/camera/terrain) are byte
+identical. material_map.json is also byte identical. GMTs retain the previously
+documented exporter nondeterminism, so their meaningful contracts were verified
+instead of claiming byte equality. Rendering/material translation was not tuned.

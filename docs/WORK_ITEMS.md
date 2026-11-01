@@ -1,6 +1,6 @@
 # Work items
 
-## Shorten README to a conventional GitHub quick start
+## Completed: shorten README to a conventional GitHub quick start
 
 - Keep the purpose, essential requirements, activated-venv setup, one conversion
   example, content-rights notice, and links to further documentation.
@@ -9,7 +9,9 @@
   and detailed limitations to focused `docs/` pages or `NOTES.md`.
 - Preserve the protected-track guidance and verify all moved links and commands.
 
-Requested 2026-10-31. Tracked here because GitHub Issues is disabled on the fork.
+Completed 2026-11-01 during the package-layout migration. The short root README
+links to `docs/USAGE.md`, which preserves the full previous guide. Requested
+2026-10-31; tracked here because GitHub Issues is disabled on the fork.
 
 ## Obtain a GMT exporter compatible with Blender 5.2
 

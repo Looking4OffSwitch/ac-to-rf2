@@ -5,14 +5,14 @@ import zipfile
 
 import pytest
 
-from blender_paths import PORTABLE_BLENDER
-from setup_tools import download, extract
+from ac_to_rf2.blender_paths import PORTABLE_BLENDER
+from ac_to_rf2.setup_tools import download, extract
 
 
 def test_download_rejects_bad_checksum_without_replacing_existing_file(tmp_path, monkeypatch):
     archive = tmp_path / "archive.zip"
     archive.write_bytes(b"existing")
-    monkeypatch.setattr("setup_tools.urllib.request.urlopen", lambda *a, **k: io.BytesIO(b"wrong"))
+    monkeypatch.setattr("ac_to_rf2.setup_tools.urllib.request.urlopen", lambda *a, **k: io.BytesIO(b"wrong"))
     with pytest.raises(ValueError, match="SHA256"):
         download("https://example.test/archive.zip", archive, "0" * 64)
     assert archive.read_bytes() == b"existing"

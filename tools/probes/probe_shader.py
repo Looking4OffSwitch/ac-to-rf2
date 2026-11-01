@@ -5,7 +5,7 @@ through its own UV layer. That is what an AC road material actually is: a base
 plus a detail tiled far finer, and it is the one thing a single baked texture
 can never reproduce, however large we make it.
 
-Run:  blender --background --factory-startup --python probe_shader.py -- <tex_dir> <out_dir>
+Run:  blender --background --factory-startup --python tools/probes/probe_shader.py -- <tex_dir> <out_dir>
 
 Exports one cube with the shader and reports what the gmt came out holding.
 """

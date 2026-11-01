@@ -19,3 +19,5 @@ jobs:
       - run: python -m venv .venv
       - run: call .venv\Scripts\activate.bat && python -m pip install -e ".[dev]"
       - run: call .venv\Scripts\activate.bat && pytest -q
+      - run: call .venv\Scripts\activate.bat && python -m build --outdir out\dist
+      - run: call .venv\Scripts\activate.bat && python tools\check_distribution.py out\dist

@@ -11,20 +11,19 @@ requires-python = ">=3.10"
 dependencies = ["numpy>=1.24,<3", "psutil>=6,<8"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8,<10"]
+dev = ["pytest>=8,<10", "build>=1.2,<2"]
 
 [project.scripts]
-ac2rf2 = "build_track:main"
-ac2rf2-test = "drive_track:main"
-ac2rf2-tools = "setup_tools:main"
-ac2rf2-check = "check_setup:main"
-ac2rf2-verify = "verify_install:main"
+ac2rf2 = "ac_to_rf2.build_track:main"
+ac2rf2-test = "ac_to_rf2.drive_track:main"
+ac2rf2-tools = "ac_to_rf2.setup_tools:main"
+ac2rf2-check = "ac_to_rf2.check_setup:main"
+ac2rf2-verify = "ac_to_rf2.verify_install:main"
 
-[tool.setuptools]
-py-modules = ["drive_track", "game_runtime", "blender_paths", "setup_tools", "backdrop", "bake_layers", "blender_stage", "build_track",
-  "check_setup", "convert_track", "finalize_track", "fix_textures", "kn5",
-  "source_formats", "make_aiw", "make_cam", "parallel", "scene_contract", "steam_paths",
-  "terrain", "material_policy", "install_location", "exporter_support", "verify_install"]
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["ac_to_rf2*"]
+namespaces = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

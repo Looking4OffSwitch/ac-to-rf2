@@ -5,8 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-import drive_track as workflow
-import game_runtime as game
+from ac_to_rf2 import drive_track as workflow
+from ac_to_rf2 import game_runtime as game
 
 
 @pytest.fixture
@@ -81,7 +81,7 @@ def test_install_only_does_not_need_source_game_or_blender(environment):
     runs = [c for c in calls if c[0] == "run"]
     assert len(runs) == 1
     command = runs[0][1]
-    assert Path(command[1]).name == "finalize_track.py" and command[2] == str(build)
+    assert command[1:3] == ["-m", "ac_to_rf2.finalize_track"] and command[3] == str(build)
     assert command[command.index("--install") + 1] == str(rf2 / "ModDev/Locations")
     assert not any(c[0] == "launch" for c in calls)
 
@@ -242,8 +242,8 @@ def test_launch_never_reports_success_for_a_quick_exit(tmp_path, monkeypatch):
 
 
 def test_output_root_is_forwarded_to_source_conversion(tmp_path, monkeypatch):
-    import build_track
-    import check_setup
+    from ac_to_rf2 import build_track
+    from ac_to_rf2 import check_setup
     commands = []
     class StopAfterSource(Exception):
         pass

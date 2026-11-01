@@ -7,7 +7,7 @@ import sys
 
 import pytest
 
-from verify_install import verify
+from ac_to_rf2.verify_install import verify
 
 
 def fixture(tmp_path):

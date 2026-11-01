@@ -1,6 +1,6 @@
 """Convert one Assetto Corsa track into rFactor 2, end to end.
 
-    python build_track.py "<AC track folder>" [--install "<rF2>\\ModDev\\Locations"]
+    ac2rf2 "<AC track folder>" [--install "<rF2>\\ModDev\\Locations"]
 
 Stages, in order:
   1. read the model, map surfaces, extract textures      convert_track.py
@@ -19,11 +19,12 @@ import struct
 import argparse
 import subprocess
 
-from parallel import default_jobs
-from blender_paths import default_blender
-from scene_contract import validate_exports
+from ac_to_rf2.project_paths import WORKSPACE_DIR, PACKAGE_DIR
+from ac_to_rf2.parallel import default_jobs
+from ac_to_rf2.blender_paths import default_blender
+from ac_to_rf2.scene_contract import validate_exports
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = str(WORKSPACE_DIR)
 BLENDER = default_blender()
 
 
@@ -221,7 +222,7 @@ def main(argv=None):
     if args.ac:
         os.environ["AC2RF2_AC_DIR"] = os.path.abspath(args.ac)
     if args.install == "auto":
-        import steam_paths
+        from ac_to_rf2 import steam_paths
         args.install = steam_paths.LOCATIONS
 
     track = os.path.basename(os.path.abspath(args.track_dir).rstrip("\\/"))
@@ -231,7 +232,7 @@ def main(argv=None):
     py = sys.executable
     lay = ["--layout", args.layout] if args.layout else []
 
-    import check_setup
+    from ac_to_rf2 import check_setup
     reuse = args.skip_geometry and os.path.isdir(os.path.join(out, "gmt"))
     if not check_setup.check(args.track_dir, args.layout, args.blender,
                              args.install, need_blender=not reuse):
@@ -239,10 +240,10 @@ def main(argv=None):
     print("\nconverting %s" % track)
 
     step(1, "model, surfaces and textures")
-    run([py, "convert_track.py", args.track_dir, "--textures", "--out", out] + lay)
+    run([py, "-m", "ac_to_rf2.convert_track", args.track_dir, "--textures", "--out", out] + lay)
 
     step(2, "texture formats")
-    run([py, "fix_textures.py", os.path.join(out, "textures"), "--jobs", str(args.jobs)])
+    run([py, "-m", "ac_to_rf2.fix_textures", os.path.join(out, "textures"), "--jobs", str(args.jobs)])
     tex = os.path.join(out, "textures")
     write_clear_texture(os.path.join(tex, "_invisible.dds"))
     # Black. White was the neutral value if rF2 multiplied this by
@@ -255,15 +256,15 @@ def main(argv=None):
     write_solid_texture(os.path.join(tex, "_white.dds"), (255, 255, 255))
 
     step(3, "composing multilayer materials")
-    run([py, "bake_layers.py", out, "--size", str(args.bake_size),
+    run([py, "-m", "ac_to_rf2.bake_layers", out, "--size", str(args.bake_size),
          "--grain", args.grain, "--detail-metres", args.detail_metres,
          "--jobs", str(args.jobs)])
 
     step(4, "waypoints, grid and pit lane")
-    run([py, "make_aiw.py", args.track_dir, os.path.join(out, track + ".AIW")] + lay)
+    run([py, "-m", "ac_to_rf2.make_aiw", args.track_dir, os.path.join(out, track + ".AIW")] + lay)
 
     step(5, "trackside cameras")
-    run([py, "make_cam.py", args.track_dir, os.path.join(out, track + ".cam"),
+    run([py, "-m", "ac_to_rf2.make_cam", args.track_dir, os.path.join(out, track + ".cam"),
          "--aiw", os.path.join(out, track + ".AIW")] + lay)
 
     step(6, "geometry (this is the slow one)")
@@ -278,7 +279,7 @@ def main(argv=None):
             shutil.rmtree(gmt_dir)
         log = blender_stage(
             [args.blender, "--background", "--factory-startup", "--python",
-             "blender_stage.py", "--", os.path.join(out, "material_map.json")],
+             str(PACKAGE_DIR / "blender_entry.py"), "--", os.path.join(out, "material_map.json")],
             ["--diffuse", args.diffuse, "--ambient", args.ambient, "--gain", args.gain],
             gmt_dir, args.jobs)
 
@@ -299,7 +300,7 @@ def main(argv=None):
     print("   %d meshes exported" % len(exported))
 
     step(7, "scene, database and install")
-    cmd = [py, "finalize_track.py", out, "--hour", args.hour,
+    cmd = [py, "-m", "ac_to_rf2.finalize_track", out, "--hour", args.hour,
            "--ambient", args.scene_ambient]
     if args.install:
         cmd += ["--install", args.install]

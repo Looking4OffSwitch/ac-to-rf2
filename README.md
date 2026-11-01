@@ -1,85 +1,19 @@
 # AC to rF2
 
-Converts an **Assetto Corsa** track into an **rFactor 2** location. It brings
-across geometry, materials, textures, surfaces and grip, the AI line, TV cameras,
-lighting and shadows. It reads Custom Shaders Patch (CSP) settings when they are
-present.
-
-The converter is generic: it reads what each AC track declares rather than using
-per-track hacks. It has been tested on Silverstone, Spa, Laguna Seca and Highlands
-(drift layout), and on two mod tracks: Wuhu Town, and Nagao in part (see
-[Scrambled (protected) mod tracks](#scrambled-protected-mod-tracks)).
-
-| | |
-|---|---|
-| ![Spa-Francorchamps, Eau Rouge](docs/screenshots/spa_eau_rouge.jpg) | ![Silverstone GP in the evening sun](docs/screenshots/silverstone_sunset.jpg) |
-| Spa-Francorchamps, Eau Rouge | Silverstone GP, evening sun |
-| ![Highlands, drift layout](docs/screenshots/highlands.jpg) | ![Nagao, a mod track](docs/screenshots/nagao.jpg) |
-| Highlands, drift layout | Nagao (mod track) |
-
-<sub>Converted tracks in rFactor 2's Developer Mode, whose editor menu shows on the left.</sub>
-
-> **Personal use only.** A converted track still contains the original track's
-> models and textures. Do not redistribute converted tracks unless you have the
-> rights to the source content.
-
----
+Convert Assetto Corsa tracks into rFactor 2 Developer Mode locations: geometry,
+materials, textures, surfaces, AI lines, cameras, lighting, and shadows.
+Custom Shaders Patch settings are read where supported.
 
 ## Requirements
 
-| What | Version | Where to get it |
-|---|---|---|
-| Windows | 10 or 11 | The scripts call Windows tools (`texconv.exe`, Blender) |
-| Memory | 16 GB recommended | With less, the converter runs fewer jobs side by side and takes longer (see `--jobs`) |
-| [Assetto Corsa](https://store.steampowered.com/app/244210/Assetto_Corsa/) | any | Steam. Provides the tracks to convert and `system/data/surfaces.ini` |
-| [rFactor 2](https://store.steampowered.com/app/365960/rFactor_2/) | current Steam build | Steam. Includes ModDev and `texconv.exe`; the GMT exporter is separate |
-| [Python](https://www.python.org/downloads/windows/) | 3.10 or newer | python.org. Tick **"Add python.exe to PATH"** in the installer |
-| [NumPy](https://numpy.org/install/) | 1.24 or newer | Installed by `python -m pip install -e .` |
-| [Blender](https://download.blender.org/release/Blender5.0/) | **5.0.1 tested** | `ac2rf2-tools` installs a portable copy alongside any system Blender |
-| rF2 GMT exporter add-on (`io_rfactor2_gmt`) | Compatible build required | **Separate download, not included with rF2:** Studio-397 forum thread [Blender rFactor2 Export Scripts](https://forum.studio-397.com/index.php?threads/blender-rfactor2-export-scripts.74821/) |
-| `texconv.exe` | ships with rF2 | `rFactor 2\Support\Tools\MapConverter\texconv.exe` |
-| [Custom Shaders Patch](https://acstuff.club/patch/) | optional | acstuff.club. Used only for its per-track config (material tweaks, GrassFX) when installed |
-
-### Default paths
-
-**Assetto Corsa and rFactor 2** are found automatically in whichever Steam
-library they are installed in, on any drive, wherever Steam itself is installed
-(Steam's folder is read from the Windows registry, its libraries from
-`libraryfolders.vdf`). To see what was found, run:
-
-```
-python steam_paths.py
-```
-
-If a game is somewhere Steam doesn't list, give its folder to `build_track.py`
-with `--rf2 "<rFactor 2 folder>"` or `--ac "<assettocorsa folder>"`.
-
-**Blender** is selected from the project's portable 5.0.1 copy in `.tools/`,
-then a system Blender 5.0 or 5.2 installation. `ac2rf2-tools` prepares the
-portable version without changing an existing Blender installation.
-
-If yours is elsewhere, pass `--blender "<path to blender.exe>"` to
-`build_track.py`, or set `AC2RF2_BLENDER` to its executable.
-
-Only Python needs to be in PATH. Blender and `texconv.exe` are called by their
-full paths.
-
----
-
-## Exporter compatibility
-
-The tested pair is **Blender 5.0.1** and the **rFactor2 IO Group community
-exporter R25.11.27**. `ac2rf2-tools` downloads both into ignored `.tools/` and
-checks their SHA256 hashes. Neither tool is included in this repository.
-
-Blender 5.2 can remain installed for other work. Its Python 3.13 cannot load
-this exporter's Python 3.11 compiled files, so conversion uses the portable
-5.0.1 copy. Supporting 5.2 for export needs updated community add-on binaries
-or source; the converter's geometry API alone already passes a 5.2 smoke test.
+- Windows 10/11, Python 3.10+, and both games installed through Steam.
+- 16 GB RAM recommended.
+- Portable Blender 5.0.1 with the matching community GMT exporter, installed by
+  `ac2rf2-tools`. Your system Blender can remain installed separately.
 
 ## Setup
 
-In a Command Prompt opened in this repository:
+In Command Prompt at the repository root:
 
 ```bat
 python -m venv .venv
@@ -89,217 +23,42 @@ ac2rf2-tools
 ac2rf2-check
 ```
 
-Activate `.venv` in each new terminal. `ac2rf2`, `ac2rf2-check`, and
-`ac2rf2-verify` are installed project commands; `pytest` runs regression tests.
-The existing `python build_track.py` commands continue to work.
+Activate `.venv` in each new terminal. Dependencies and project commands are
+installed by pip; Python source code lives in `src/ac_to_rf2`.
 
-For repeated conversion, installation, and Developer Mode testing, run:
+## Convert and test
 
 ```bat
-ac2rf2-test ks_laguna_seca --restart-game --jobs 4
+ac2rf2-test ks_laguna_seca --jobs 4 --no-launch
 ```
 
-See [the testing workflow](docs/TESTING.md) for batch tracks/layouts, install-only,
-launch-only, and dry-run options, and [validation steps](docs/VALIDATION.md) for
-export probes and in-game comparison. The larger README reduction remains tracked in
-[WORK_ITEMS.md](WORK_ITEMS.md).
+This converts, verifies, and installs the track for manual testing in Developer
+Mode. Omit `--no-launch` to start Developer Mode automatically. Use
+`--restart-game` to close an existing session before updating.
 
----
-
-## Converting a track
-
-### The easy way
-
-Drag the AC track folder onto **`convert.bat`**. For example, drag
-`...\assettocorsa\content\tracks\ks_silverstone`.
-
-If the track has several layouts, the converter lists them and asks which one to
-build. Type the part after `models_` (e.g. `gp`), or press Enter for the default
-layout. Some tracks (Silverstone, Highlands) have no default, and the converter
-says so.
-
-If the conversion fails, the window says so and keeps the messages on screen.
-
-**How long it takes:** about **5–7 minutes** per track on a 12-thread CPU
-(measured: Spa 4.5 minutes, Laguna Seca 7). Blender does most of the work and the
-converter runs several Blenders side by side, so more CPU cores help the most.
-One job at a time (`--jobs 1`) it is about **11–15 minutes**.
-`--skip-geometry` reruns only the later steps in a few minutes.
-
-The result is:
-
-- installed into `rFactor 2\ModDev\Locations\<track>`
-- copied to `out\<track>\rf2\<track>`: to use the track on another PC, copy that
-  folder (zip it yourself if you like) into that PC's `ModDev\Locations`
-
-**Disk space:** the build also leaves its working files in `out\<track>\` inside
-this folder: extracted textures, meshes and logs, often several GB per track.
-The installed track in rF2 doesn't need them. Delete `out\` whenever you like
-(copy out any `rf2\<track>` folder you want to keep first); you only lose the ability to rerun a track's later steps with `--skip-geometry`.
-Git ignores `out\`, so none of it is ever uploaded.
-
-### From the command line
-
-```
-python build_track.py "<AC track folder>" --install auto
+```bat
+ac2rf2-test ks_laguna_seca spa ks_silverstone::gp --no-launch
+ac2rf2-test ks_laguna_seca --install-only --no-launch
+ac2rf2-test --launch-only
 ```
 
-Useful options:
+Builds stay in ignored `out/`; installs go into rFactor 2's `ModDev/Locations`.
+The root `convert.bat` remains available for drag-and-drop conversion.
 
-| Option | What it does |
-|---|---|
-| `--install auto` | Install into rF2's `ModDev\Locations`, found in your Steam libraries (or give the folder's path instead of `auto`) |
-| `--layout <name>` | Which layout of a multi-layout track: the part after `models_` in `models_<name>.ini` (e.g. `--layout gp`) |
-| `--hour HH:MM` | Session start time written into the GDB (default `12:00`; e.g. `18:30` for a low evening sun) |
-| `--skip-geometry` | Reuse the meshes from the previous run and redo only the later steps (much faster) |
-| `--jobs <n>` | How many Blenders and texture conversions run side by side. The default is half your CPU threads, at most 6, and fewer if free memory is short (about 2.5 GB each). `--jobs 1` runs everything one at a time, as older versions did |
-| `--blender <path>` | Use a Blender that is not in the default folder |
-| `--rf2 <folder>` / `--ac <folder>` | Use an rFactor 2 or Assetto Corsa installation that Steam doesn't list |
+## Documentation
 
-### Checking an install
+- [Workflow options and batch/layout examples](docs/TESTING.md)
+- [Complete usage, requirements, packaging, and limitations](docs/USAGE.md)
+- [Visual and file validation](docs/VALIDATION.md)
+- [Source format compatibility](docs/FORMATS.md)
+- [Development, package layout, and tests](docs/DEVELOPMENT.md)
+- [Measured findings](docs/NOTES.md) and [work items](docs/WORK_ITEMS.md)
 
-```
-python verify_install.py "<rF2>\ModDev\Locations\<track>" out\<track>
-```
+## Limitations and content rights
 
-This checks that every texture the scene references exists, that draw ranges,
-shadows and the track database are in place, and prints a summary.
+The near-car road band still needs in-game validation; CSP GrassFX and some
+material behavior are approximated. Normal rFactor 2 requires a separate
+packaging step. See the full usage guide for details and protected-track guidance.
 
-### Driving it: Developer Mode (do this first)
-
-The converter installs into `ModDev`, which only rF2's **Developer Mode** (Mod
-Mode) loads. To start it:
-
-- In Steam, press **Play** on rFactor 2 and choose the developer / Mod Mode
-  option, or
-- use `ac2rf2-test --launch-only --restart-game`, which supplies the game root
-  as the working directory and confirms the actual Mod Mode process.
-
-Pick the converted track; it appears under its AC folder name, e.g.
-`ks_silverstone_gp`. It is the same game with the same physics. **Always test a
-track here first:** if something is wrong, it is much quicker to fix and
-reconvert before packaging.
-
-### Optional: using it in normal rFactor 2
-
-Normal rF2 (and online servers) only load tracks that are packed into `.mas`
-archives inside an installed `.rfcmp` package.
-
-**Why the converter doesn't do this:** rF2's `ModMgr.exe` has command-line
-options for building MAS files and packages, but in the current build the MAS
-creation option exits without writing anything, so the later steps can't run
-either. The MAS format is encrypted and its files are signed, so writing one
-from scratch isn't practical. That leaves rF2's own GUI tool, done by hand.
-
-It takes about 5–10 minutes per track, in `rFactor 2\Support\Tools\MAS2.exe`:
-
-1. **Create three MAS files.** Drag files from
-   `ModDev\Locations\<track>\` into MAS2 and save each set as its own MAS:
-   - `<track>_assets.mas`: everything in `Assets\GMTs` and `Assets\MAPs`, plus `<track>.tdf`
-   - `<track>_materials.mas`: everything in `Assets\Materials`
-   - `<track>_layout.mas`: everything in the inner `<track>\` folder (`.scn`, `.gdb`, `.aiw`, `.cam` and the rest)
-2. **Package.** Click **Package** → **Create Single Cmp Package** →
-   `<Add New Component>`. Name it after the track, set the type to
-   **Location** and the version to `1.0`, then add the three MAS files and click
-   **Package**. This writes `<track>.rfcmp`.
-3. **Install.** Click **Install** (or open the `.rfcmp` with `Bin64\ModMgr.exe`).
-   The track now shows up in normal rFactor 2.
-
-See Studio 397's
-[packaging tutorial](https://www.studio-397.com/wp-content/uploads/2016/12/rF2_Packaging_Tutorial.pdf)
-for screenshots of these dialogs.
-
----
-
-## Pipeline
-
-`build_track.py` runs these steps in order:
-
-| Step | Script | What it does |
-|---|---|---|
-| 1 | `convert_track.py` | Reads the kn5 models, materials, AC surfaces and CSP config, and writes `material_map.json` |
-| 2 | `fix_textures.py` | Converts textures to formats rF2 loads |
-| 3 | `bake_layers.py` | Turns AC multilayer materials into rF2 two-stage textures (base and detail), cut-outs and specular maps |
-| 4 | `make_aiw.py` | Builds the AI line and pit lane from AC's `ai/` files |
-| 5 | `make_cam.py` | Builds TV cameras from AC's camera sets |
-| 6 | `blender_stage.py` | Builds the meshes and materials in Blender and exports `.gmt` through the rF2 add-on (with `backdrop.py`) |
-| 7 | `finalize_track.py` | Writes the scene (`.scn`), track database (`.gdb`) and terrain (`.tdf`), then installs |
-
-Other files:
-
-- `check_setup.py`: checks that everything a conversion needs is installed (run first by every build)
-- `kn5.py`: reader for AC's kn5 model format
-- `steam_paths.py`: finds Assetto Corsa, rFactor 2 and `texconv.exe` in your Steam libraries
-- `parallel.py`: how many jobs run side by side (`--jobs`), and the helper that runs texture conversions in parallel
-- `probe_*.py`: diagnostic tools used while working out the rF2 formats
-- `NOTES.md`: a running log of every finding, with the measurement behind each decision. Read this before changing how materials are translated.
-- `AGENTS.md`: how to work on the code, written for AI coding assistants (and useful for people too)
-
----
-
-## Known limitations
-
-- **Near-car band:** on roads whose AC detail texture is very contrasty
-  (Silverstone, Spa), a band of visible asphalt grain can show a few metres in
-  front of the car. It is mitigated, not solved.
-- **Grass:** CSP GrassFX has no rF2 equivalent. Grass brightness is approximated.
-- **Weather and clouds** are set in the rF2 session, not by the converter.
-- **Normal rF2** needs a manual packaging step (see *Optional: using it in normal rFactor 2*).
-- **Spawn point:** every session (practice included) starts on AC's main start
-  grid, not in the pits. Pit boxes built from AC's pit markers were unreliable on
-  mod tracks, so garages are placed on the start spots
-  (`GARAGES_AT_GRID` in `make_aiw.py`).
-
-## Known bugs
-
-- **Track Cameras** can be underground some(most)times, havent given it much importance.
-- **AI line** on some modded tracks partly runs outside the surfaces the converter recognises as road (e.g. ~1/3 on ek_nagao), so AI cars may drive oddly there. Driving yourself is not affected.
-
-## Scrambled (protected) mod tracks
-
-Some mod tracks store their model data in a deliberately scrambled form.
-`ek_nagao` is the one found so far. AC with CSP draws them correctly; the
-converter can only partly recover them.
-
-**What the data looks like:** every texture coordinate is stored as
-`0.5 + d` or `0.5 - d`, and which sign each point gets is random. Light
-directions (vertex normals) are also randomly flipped. Read as stored, every
-road tile samples across the whole texture sheet and the track turns to streaks.
-
-**What we tried:**
-
-- Rendered the road directly from the kn5, with rF2 out of the loop: it is
-  scrambled there too, so the converter is not the cause. Wuhu Town,
-  Silverstone and Laguna render clean the same way.
-- Checked the layout's other model files and CSP's `.vao-patch` file. The
-  model files hold only objects; the patch holds only ambient occlusion.
-- Compared the kn5 headers with tracks that convert correctly: they are
-  identical.
-- Sampled the stored coordinates with "mirror" and "clamp" texture addressing:
-  both still scrambled.
-- Looked for the true sign in the rest of each vertex (normal, tangent): it
-  matches none of them, 50% against everything. Within a road quad all four
-  signs agree only 12% of the time, which is chance.
-
-**What the converter does:** `kn5.py` (`unfold_vertex_data`) reads every
-coordinate as `0.5 - |d|` and turns flipped normals back towards their faces.
-That is correct for most of the road and grass, so the track is drivable and
-mostly right. The triangles whose real sign was the other one still show the
-wrong part of the texture sheet, which shows as stripes and patches. It only
-switches on for a model file where it shrinks the typical triangle's texture
-span at least 8× (37× on ek_nagao, 1.0× on stock tracks and Wuhu Town), so
-normal tracks are never touched.
-
-**Conclusion:** the correct signs are not in any file we can read. Something
-on the AC/CSP side must know them, most likely a decoding step for protected
-models. This is an inference, not proven. Recovering the rest would mean
-breaking that protection, so it is not attempted here. For a clean conversion,
-ask the track's author for an unprotected version.
-
-
-<br>
-<br>
-
----
-
-<p align="center"><sub><i>All the code in this project was written by an LLM.</i></sub></p>
+Converted tracks contain the source models and textures. Do not redistribute
+converted content unless you have the required rights.

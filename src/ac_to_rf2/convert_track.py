@@ -12,16 +12,17 @@ import sys
 import json
 import argparse
 import shutil
-import steam_paths
+from ac_to_rf2 import steam_paths
 import struct
 from collections import OrderedDict, defaultdict
 
-from kn5 import KN5, iter_textures
-from source_formats import (SourceFormatError, read_fast_lane_file, read_ini,
+from ac_to_rf2.project_paths import WORKSPACE_DIR
+from ac_to_rf2.kn5 import KN5, iter_textures
+from ac_to_rf2.source_formats import (SourceFormatError, read_fast_lane_file, read_ini,
                             ini_required, ini_number, ini_vector)
-from terrain import surface_tdf
-from material_policy import unknown_shaders
-from scene_contract import (SCHEMA_VERSION, MaterialNames, model_meshes, mesh_key,
+from ac_to_rf2.terrain import surface_tdf
+from ac_to_rf2.material_policy import unknown_shaders
+from ac_to_rf2.scene_contract import (SCHEMA_VERSION, MaterialNames, model_meshes, mesh_key,
                             material_signature, surface_prefix)
 
 # AC surface key -> native rF2 behavior to clone. Each declared AC surface
@@ -1019,7 +1020,7 @@ def main():
     placed = placements(track_dir, args.layout)
     for w in warnings:
         print("   WARNING %s" % w)
-    here = os.path.dirname(os.path.abspath(__file__))
+    here = str(WORKSPACE_DIR)
     out_dir = args.out or os.path.join(here, "out", track_id)
     os.makedirs(out_dir, exist_ok=True)
 
