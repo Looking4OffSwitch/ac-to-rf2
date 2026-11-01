@@ -32,7 +32,7 @@ def main():
     with tarfile.open(sources[0]) as archive:
         names = [n.partition("/")[2] for n in archive.getnames()]
         for required in ["src/ac_to_rf2/blender_entry.py", "docs/NOTES.md", "tests/test_package_layout.py",
-                         "tools/probes/probe_normals.py", "convert.bat"]:
+                         "tools/probes/probe_normals.py", "convert.bat", "launch_dev_mode.bat"]:
             assert required in names, required
         assert not any(n.startswith(("out/", ".tools/", ".venv/")) for n in names)
     with tempfile.TemporaryDirectory(prefix="distribution-", dir=dist.parent) as temporary:

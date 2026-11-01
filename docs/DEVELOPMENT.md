@@ -10,6 +10,7 @@ tools/              Python distribution-validation automation
 docs/               guides, measured notes, screenshots, and work items
 pyproject.toml      dependencies, packaging, commands, and pytest settings
 convert.bat         retained drag-and-drop launcher (CRLF)
+launch_dev_mode.bat  one-click .venv / Developer Mode launcher (CRLF)
 ```
 
 Use an activated `.venv` and reinstall after changing entry points or layout:

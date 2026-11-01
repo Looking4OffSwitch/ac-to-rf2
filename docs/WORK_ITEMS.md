@@ -24,3 +24,19 @@ verify material colours, blend factors, alpha testing, and authored normals.
 The separate Blender 5.2 geometry smoke test also passes. Do not
 claim visual defects or the near-car road band resolved until in-game checks
 pass. The converter now diagnoses this dependency during setup.
+
+
+## Manually isolate Developer Mode loading crash and bundled vehicle audio
+
+The AIW type/connection defects from the 2026-11-01 report are corrected and
+Laguna is reinstalled. The native onFatalError 11 still needs manual validation;
+no game was launched during the repair. With the same stock Skip Barber,
+compare bundled Joesville and converted Laguna with zero AI, then add AI and
+exercise pit entry/exit. Preserve the new trace and compare warning/fatal lines.
+
+The readable bundled Vehicles/SkipBarber sound archive lacks four samples named
+by skipbarber_snd.json. The separate Sounds/SkipBarber archive reports Unknown
+MAS key in the official MAS utility; this is not proof of corruption. Do not
+replace archives or invent silent samples. Confirm the supported SDK/vehicle
+configuration with Studio 397 if Steam verification/update leaves the mismatch.
+Measured filenames, counts, trace timings and AIW hashes are in docs/NOTES.md.

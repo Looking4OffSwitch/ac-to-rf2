@@ -47,6 +47,13 @@ def fixture(tmp_path):
         (r["mesh"], r["gmt"]) for r in records))
     for p in (layout / "venue.gdb", layout / "venue.AIW", installed / "venue.tdf"):
         p.write_text("fixture")
+    from ac_to_rf2.make_aiw import render_aiw
+    boxes = [(4, 0, 1, 0)]
+    (layout / "venue.AIW").write_text(render_aiw(
+        [(0, 0, 0, 6), (10, 0, 0, 6), (0, 0, 10, 6)], 34,
+        [((0, 0, 0), 0, "start")], boxes, boxes,
+        dict(entry=0, exit=1, lane=[(3, 0, 0, 0), (6, 0, 0, 0)],
+             boxes=boxes, side=1)))
     return installed, out
 
 
@@ -83,3 +90,10 @@ def test_real_blender_52_geometry_api():
                             capture_output=True, text=True, timeout=60)
     assert result.returncode == 0, result.stdout + result.stderr
     assert "AC2RF2 BLENDER SMOKE" in result.stdout
+
+
+def test_verifier_rejects_nonempty_broken_aiw(tmp_path, capsys):
+    installed, out = fixture(tmp_path)
+    (installed / "venue/venue.AIW").write_text("fixture")
+    assert verify(installed, out) == 1
+    assert "AIW: number_waypoints" in capsys.readouterr().out

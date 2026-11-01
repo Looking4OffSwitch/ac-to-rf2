@@ -102,7 +102,7 @@ def launch_developer(rf2, timeout=90, trace=2):
                 found_at = time.monotonic()
                 found_pid = developer.pid
             elif time.monotonic() - found_at >= 2:
-                print("Developer Mode confirmed (PID %d)." % developer.pid, flush=True)
+                print("Developer Mode process running (PID %d); track/vehicle loading is not verified." % developer.pid, flush=True)
                 return developer
         else:
             found_at = None

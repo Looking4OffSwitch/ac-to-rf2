@@ -9,6 +9,19 @@ cd /d D:\dev\ac-to-rf2
 python -m pip install -e ".[dev]"
 ```
 
+## One-click Developer Mode
+
+Double-click `launch_dev_mode.bat` in the repository root. It activates the
+project's `.venv` and runs the existing launch-only workflow. No conversion or
+installation is performed. Startup failures stay visible in the console.
+
+Optional CLI arguments are forwarded, for example:
+
+```bat
+launch_dev_mode.bat --restart-game
+launch_dev_mode.bat --dry-run
+```
+
 ## Normal iteration
 
 ```bat
@@ -20,7 +33,7 @@ requested, converts the track, verifies the staged location, installs it into
 `ModDev\Locations`, then launches `Bin64\rFactor2 Mod Mode.exe` with the game
 root as its working directory. It checks that the actual Mod Mode process stays
 running for at least two seconds. A regular-game process or a launch timeout is
-an error. Process confirmation does not prove that the track renders correctly.
+an error. Process confirmation does not prove that the selected track/vehicle loads or renders correctly.
 
 The implementation is `src/ac_to_rf2/drive_track.py`. The equivalent module
 command is `python -m ac_to_rf2.drive_track ...`; installed commands are unchanged.
@@ -88,3 +101,20 @@ launching simultaneously, and rechecks that the game is stopped before install.
 No PowerShell scripts are used. Converted assets stay in ignored output folders.
 For visual checks, follow [VALIDATION.md](VALIDATION.md). Launch working-directory
 requirements are documented by [Studio 397](https://docs.studio-397.com/display/DG/Developer%2BMode).
+
+## Loading warnings and crashes
+
+The launcher confirms a running Developer Mode process, not a completed driving
+session. If a warning appears, preserve the latest `ModDev\UserData\Log\trace_*.txt`.
+Start with zero AI opponents. Compare the same vehicle on bundled Joesville and
+the converted track to separate vehicle/SDK warnings from track defects.
+
+The converter now rejects AIW files with missing pit types, disconnected locations
+or invalid waypoint links before installation. Existing builds made before this
+check need AIW regeneration; `--install-only` reuses their AIW and will reject an
+invalid old one. A full conversion regenerates it automatically.
+
+The 2026-11-01 Skip Barber warnings reference four samples absent from the mounted
+bundled vehicle archive. This is separate from converted track content. If those
+warnings persist on Joesville, use Steam's installed-file verification and check
+for an SDK update. See measured evidence and remaining manual checks in NOTES.md.

@@ -1520,3 +1520,92 @@ layout files (275 textures plus scene/database/AI/camera/terrain) are byte
 identical. material_map.json is also byte identical. GMTs retain the previously
 documented exporter nondeterminism, so their meaningful contracts were verified
 instead of claiming byte equality. Rendering/material translation was not tuned.
+
+
+## Developer Mode loading warning: AIW type and connection defects (2026-11-01)
+
+The user's trace_2026_11_01_09_20_59-31.txt records 'No pit box waypoints
+found' at 70.48 s (line 10493), grid/pit waypoint resets at 77.48 s
+(line 10524), four missing Skip Barber sound samples at 81.09-81.26 s
+(lines 10814-10817), then onFatalError 11 at 117.51 s (line 12297).
+The trace establishes a native crash after those warnings; it does not establish
+that a particular warning caused the crash. Earlier notes claiming that merely
+adding untyped pit stubs prevented the crash were too strong.
+
+### Measured AIW defect and correction
+
+The installed old Laguna AIW declared 24 PitPos records, 592 main-path points,
+24 pit-lane points, and 48 nonpath stubs (664 total). None of its WP_PTRS
+fourth fields identified a pit box. The main entry incorrectly used type 1,
+the pit lane incorrectly used type 0, and pit stubs used team ordinals 0-23.
+No lane branch pointed into those pit stubs, and grid waypoint pairs were absent.
+A nonempty AIW previously passed verification despite these defects.
+
+Primary format evidence is the bundled ModDev location data, not a guessed
+number: Joesville has 15 pit positions and 30 nonpath waypoints with matching
+branchID and WP_PTRS type 106-120; both Loch Drummond layouts have 20 pit
+positions and 40 matching waypoints of types 106-125. All three encode main
+points as type 0, pit lane as type 1, grid locations as 2+i, and pit locations
+as 106+i. Location endpoints have self next links and separate approach points;
+the path's third pointer connects to the approach. All three native AIWs pass
+the new validator. Studio 397's AI tutorial also requires joining pit branches
+and generating location connections:
+https://docs.studio-397.com/display/DG/Track+AI+Tutorial .
+
+The generic writer now emits the measured types, matching nonpath flags,
+connected grid/pit pairs and both pit-lane joins. Shared nearest anchors retain
+all incoming location branches through a branch chain. Missing connected pit
+lanes now stop generation instead of emitting unusable fallback locations.
+AIW serialization is separated from source extraction for synthetic regressions.
+Generation and installation validate record count, finite positions, pointer
+bounds, type/branch/flag consistency, the reciprocal main loop, graph reachability,
+and typed pit pairs at each declared PitPos. Grid pairs are required for each
+declared grid slot. This validates file structure, not AI driving quality.
+
+Laguna's regenerated AIW has 712 points: 592 main, 24 lane, 48 grid and 48 pit.
+All 24 grid slots and pit boxes have connected pairs. Its SHA-256 is
+970d36eac7fbb75f9274d34103287564f1aa9b03889629ffe3b5d8ca29116d66 in both
+out/_layout_validation/ks_laguna_seca and the installed ModDev location.
+The 1404 staged/installed file paths and sizes match; AIW/SCN/GDB/CAM bytes match.
+sectors.json matches the prior build exactly, so timing geometry was not changed.
+The existing 1124 GMTs and 275 textures pass the complete installation verifier.
+Only AI data was regenerated; materials and geometry were not rebuilt or tuned.
+
+### Separate vehicle-audio findings and remaining manual test
+
+The four missing samples are referenced by the bundled
+ModDev/Vehicles/SkipBarber/skipbarber_snd.json: Skip_TC_in.wav,
+Caterham_in_shift.wav, Caterham_ext_startup.wav, and Skip_TC_ext.wav.
+The trace mounts Vehicles/SkipBarber/SkipBarber_Sounds.mas. Inspection using
+the installed official Support/Tools/MAS2.exe shows 83 entries in that
+27,105,288-byte archive and none of these four names. It contains the separate
+skipb_in_shift.wav and skipb_ex_startup.wav names. This is a bundled vehicle
+configuration/archive mismatch independent of the converter's track output.
+No vehicle files or audio samples have been substituted.
+
+A second archive at ModDev/Sounds/SkipBarber/SkipBarber_Sounds.mas is
+27,633,737 bytes; the official MAS utility reports 'Unknown MAS key' when
+opening it. This utility error alone does not establish corruption. Its contents were not
+inferred, extracted or bypassed. Copying it
+over the mounted archive is not a verified repair. Steam file verification or
+an SDK update is the appropriate next check if the stock vehicle warning
+persists. The corrected AIW has not been driven: no game was launched during
+this change, and the native crash is NOT yet proven resolved. For isolation,
+first manually test stock Skip Barber on bundled Joesville with zero AI, then
+the converted Laguna with zero AI, then add AI and test pit entry/exit.
+
+### Launcher and regression checks
+
+Root launch_dev_mode.bat activates the checkout's standard .venv, changes to
+the repository directory, delegates to the existing launch-only module, forwards
+options and retains nonzero failures with a visible pause. It remains CRLF and
+is included in the source distribution. Dry-run from an unrelated directory
+passed; missing .venv and invalid rF2 path cases returned 1 without launching.
+The launch message now explicitly confirms only a running Developer Mode
+process; it does not claim the vehicle/track loaded or rendered successfully.
+
+149 local tests pass, including 11 added cases for AIW types, shared anchors,
+missing pit markers, disconnected branches, invalid indices/counts/coordinates,
+PitPos mismatch and installation rejection of nonempty invalid AIW files.
+Wheel/sdist builds and the isolated distribution checker pass. The regression
+suite does not automate native rFactor 2 gameplay or assert crash resolution.

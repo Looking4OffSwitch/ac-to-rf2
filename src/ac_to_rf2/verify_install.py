@@ -12,6 +12,7 @@ import re
 import sys
 import json
 import struct
+from ac_to_rf2.aiw_contract import validate_aiw
 from ac_to_rf2.scene_contract import index_meshes, mesh_key, validate_exports
 
 # Measured by exporting one mesh twice with different thresholds and diffing:
@@ -144,6 +145,10 @@ def verify(installed, out_dir):
                      os.path.join(installed, venue + ".tdf")):
         if not os.path.isfile(required) or not os.path.getsize(required):
             problems.append("missing required location file: " + required)
+    aiw_path = os.path.join(installed, venue, venue + ".AIW")
+    if os.path.isfile(aiw_path):
+        with open(aiw_path, encoding="utf-8-sig") as fh:
+            problems.extend(validate_aiw(fh.read()))
     rec_path = os.path.join(out_dir, "gmt", "exported.json")
     records = json.load(open(rec_path)) if os.path.exists(rec_path) else []
     try:

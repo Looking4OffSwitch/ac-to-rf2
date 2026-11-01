@@ -762,7 +762,50 @@ def build(track_dir, out_path, layout):
                        for p, y, _nm in (starts[i % len(starts)]
                                          for i in range(len(pit_boxes)))]
         print("garages: at AC's start spots (%d)" % len(starts))
-    total_wp = len(wps) + (len(pl["lane"]) + 2 * len(pl["boxes"]) if pl else 0)
+    text = render_aiw(wps, length, starts, pit_boxes, pit_garages, pl)
+    from ac_to_rf2.aiw_contract import validate_aiw
+    problems = validate_aiw(text)
+    if problems:
+        raise ValueError("; ".join(problems))
+    with open(out_path, "w", encoding="utf-8") as f:
+        f.write(text)
+    print("wrote %s" % out_path)
+    write_sector_polys(wps, os.path.join(os.path.dirname(out_path), "sectors.json"))
+    return {"waypoints": n, "length": length, "grid": len(starts), "pits": len(pits)}
+
+
+def render_aiw(wps, length, starts, pit_boxes, pit_garages, pl):
+    if not pl or not pit_boxes:
+        raise ValueError("Cannot generate a usable AIW without a connected pit lane and pit boxes")
+    if len(starts) > 104:
+        raise ValueError("AIW supports at most 104 grid waypoint types")
+    n = len(wps)
+    lane = pl["lane"]
+    m = len(lane)
+    if n < 3 or m < 2 or pl["entry"] == pl["exit"]:
+        raise ValueError("AIW needs a main loop and a pit lane with distinct entry/exit")
+    total_wp = n + m + 2 * (len(starts) + len(pit_boxes))
+    branches = {pl["entry"]: n, pl["exit"]: n + m - 1}
+    locations = []
+    # Native Joesville/Loch Drummond encode grid types at 2+i and pit types
+    # at 106+i, in BOTH branchID and WP_PTRS' fourth field. Each location
+    # has an endpoint and an approach connected from the driving path.
+    groups = [(2 + i, pos, yaw, wps, 0, 0)
+              for i, (pos, yaw, _name) in enumerate(starts)]
+    groups += [(106 + i, (x, y, z), yaw, lane, n, 1)
+               for i, (x, y, z, yaw) in enumerate(pit_boxes)]
+    for kind, pos, yaw, path, offset, in_pits in groups:
+        near = min(range(len(path)), key=lambda j: sum(
+            (path[j][axis] - pos[axis]) ** 2 for axis in (0, 2)))
+        anchor = offset + near
+        endpoint = n + m + len(locations)
+        approach = endpoint + 1
+        # Branch chains preserve all locations if several share one anchor.
+        onward = branches.get(anchor, -1)
+        branches[anchor] = approach
+        locations += [(pos, yaw, kind, in_pits, (approach, endpoint, anchor, kind)),
+                      (tuple((path[near][k] + pos[k]) / 2 for k in range(3)),
+                       yaw, kind, in_pits, (anchor, endpoint, onward, kind))]
 
     L = []
     a = L.append
@@ -792,9 +835,7 @@ def build(track_dir, out_path, layout):
     spots("ALTGRID", starts)
     spots("TELEPORT", starts)
 
-    # Every car needs a pit box and a garage on a real pit lane. Without them
-    # rF2 red flags the whole field for "Exiting Pits Under Red" and aborts on
-    # entering the world.
+    # Positions alone are insufficient: typed waypoint connections follow below.
     a("[PITS]")
     for i, (bx, by, bz, byaw) in enumerate(pit_boxes):
         gx, gy, gz, gyaw = pit_garages[i]
@@ -856,10 +897,8 @@ def build(track_dir, out_path, layout):
         a("wp_branchID=(0)")
         a("wp_bitfields=(0)")
         a("wp_pitlane=(%d)" % (1 if pl and i == pl["entry"] else 0))
-        if pl and i == pl["entry"]:
-            a("WP_PTRS=(%d,%d,%d,1)" % ((i - 1) % n, (i + 1) % n, n))
-        else:
-            a("WP_PTRS=(%d,%d,-1,0)" % ((i - 1) % n, (i + 1) % n))
+        a("WP_PTRS=(%d,%d,%d,0)" %
+          ((i - 1) % n, (i + 1) % n, branches.get(i, -1)))
         dist += math.hypot(nx - x, nz - z)
 
     # pit lane, as branch 1: it leaves the main path at the entry waypoint and
@@ -889,49 +928,31 @@ def build(track_dir, out_path, layout):
             a("wp_branchID=(1)")
             a("wp_bitfields=(0)")
             a("wp_pitlane=(1)")
-            a("WP_PTRS=(%d,%d,-1,0)" % (prev, nxt))
+            a("WP_PTRS=(%d,%d,%d,1)" % (prev, nxt, branches.get(n + j, -1)))
 
-        # Pit boxes need waypoints of their own, separate from the [PITS] list.
-        # Without them rF2 logs "No pit box waypoints found", cannot seat the
-        # cars, and aborts. Each box is a two waypoint stub hanging off the
-        # nearest pit lane point: an approach, then the box itself.
-        base = n + m
-        for bi, (bx, by, bz, byaw) in enumerate(pl["boxes"]):
-            near = min(range(m), key=lambda j: (lane[j][0] - bx) ** 2
-                                               + (lane[j][2] - bz) ** 2)
-            lane_idx = n + near
-            appr = base + bi * 2
-            box = appr + 1
-            ax = (lane[near][0] + bx) / 2.0
-            az = (lane[near][2] + bz) / 2.0
-            for idx, (px_, py_, pz_, ptrs) in (
-                    (appr, (ax, by, az, (lane_idx, box))),
-                    (box, (bx, by, bz, (appr, box)))):
-                fx, fz = math.sin(byaw), math.cos(byaw)
-                a("wp_pos=(%.4f,%.4f,%.4f)" % (px_, py_, pz_))
-                a("wp_perp=(%.4f,0.0000,%.4f)" % (-fz, fx))
-                a("wp_normal=(0.0000,1.0000,0.0000)")
-                for pi in (0, 1, 2):
-                    a("wp_pathinfo2=(%d,0.0000,-1.0000,-1.0000)" % pi)
-                    a("wp_oriantation=(%d,0.0000,%.4f,0.0000)" % (pi, byaw))
-                    a("wp_pathflags=(%d,0)" % pi)
-                a("wp_width=(3.000,3.000,3.000,3.000)")
-                a("wp_dwidth=(3.000,3.000,0.000,0.000)")
-                a("wp_lockedAlpha=(0)")
-                a("wp_test_speed=(0.000000)")
-                a("wp_reverb=(0)")
-                a("wp_score=(0,0.000)")
-                a("wp_wpse=(0,0)")
-                a("wp_branchID=(%d)" % bi)
-                a("wp_bitfields=(1)")
-                a("wp_pitlane=(1)")
-                a("WP_PTRS=(%d,%d,-1,%d)" % (ptrs[0], ptrs[1], bi))
+    for pos, yaw, kind, in_pits, ptrs in locations:
+        px_, py_, pz_ = pos
+        fx, fz = math.sin(yaw), math.cos(yaw)
+        a("wp_pos=(%.4f,%.4f,%.4f)" % (px_, py_, pz_))
+        a("wp_perp=(%.4f,0.0000,%.4f)" % (-fz, fx))
+        a("wp_normal=(0.0000,1.0000,0.0000)")
+        for pi in (0, 1, 2):
+            a("wp_pathinfo2=(%d,0.0000,-1.0000,-1.0000)" % pi)
+            a("wp_oriantation=(%d,0.0000,%.4f,0.0000)" % (pi, yaw))
+            a("wp_pathflags=(%d,0)" % pi)
+        a("wp_width=(3.000,3.000,3.000,3.000)")
+        a("wp_dwidth=(3.000,3.000,0.000,0.000)")
+        a("wp_lockedAlpha=(0)")
+        a("wp_test_speed=(0.000000)")
+        a("wp_reverb=(0)")
+        a("wp_score=(0,0.000)")
+        a("wp_wpse=(0,0)")
+        a("wp_branchID=(%d)" % kind)
+        a("wp_bitfields=(1)")
+        a("wp_pitlane=(%d)" % in_pits)
+        a("WP_PTRS=(%d,%d,%d,%d)" % ptrs)
 
-    with open(out_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(L) + "\n")
-    print("wrote %s" % out_path)
-    write_sector_polys(wps, os.path.join(os.path.dirname(out_path), "sectors.json"))
-    return {"waypoints": n, "length": length, "grid": len(starts), "pits": len(pits)}
+    return "\n".join(L) + "\n"
 
 
 if __name__ == "__main__":
