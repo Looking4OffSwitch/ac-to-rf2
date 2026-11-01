@@ -25,12 +25,12 @@ The fixture suite can run without either game or Blender installed.
 ## Convert and inspect a stock track
 
 ```bat
-ac2rf2 "C:\Program Files (x86)\Steam\steamapps\common\assettocorsa\content\tracks\ks_laguna_seca" --install auto
+ac2rf2-test ks_laguna_seca --restart-game --jobs 4
 ac2rf2-verify "C:\Program Files (x86)\Steam\steamapps\common\rFactor 2\ModDev\Locations\ks_laguna_seca" out\ks_laguna_seca
 ```
 
-Adapt paths for other Steam libraries. Start rFactor 2 Developer Mode and select
-the converted venue. Verification checks files and exported contracts; it cannot
+The command launches Developer Mode after verification and installation. Select
+the converted venue. See [workflow options](TESTING.md) for batch/reuse modes. Verification checks files and exported contracts; it cannot
 prove the appearance in the renderer.
 
 ## Compare visuals before tuning

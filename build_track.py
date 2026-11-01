@@ -179,12 +179,7 @@ def blender_stage(pre, post, gmt_dir, jobs):
     return "\n".join(logs)
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("track_dir")
-    ap.add_argument("--install", default=None,
-                    help='an rF2 ModDev\\Locations folder, or "auto" to find it '
-                         'in your Steam libraries')
+def add_build_options(ap):
     ap.add_argument("--hour", default="12:00")
     ap.add_argument("--bake-size", type=int, default=12288)
     ap.add_argument("--grain", default="2")
@@ -196,8 +191,6 @@ def main():
     ap.add_argument("--ambient", default="0.30")
     ap.add_argument("--scene-ambient", default="126")
     ap.add_argument("--blender", default=BLENDER)
-    ap.add_argument("--layout", default=None,
-                    help="for a multi-layout track: the part after models_ in models_<layout>.ini")
     ap.add_argument("--skip-geometry", action="store_true",
                     help="reuse the meshes already exported")
     ap.add_argument("--jobs", type=int, default=default_jobs(),
@@ -208,7 +201,19 @@ def main():
                     help="the rFactor 2 folder, if Steam does not list it")
     ap.add_argument("--ac", default=None,
                     help="the assettocorsa folder, if Steam does not list it")
-    args = ap.parse_args()
+    ap.add_argument("--out-root", default=os.path.join(HERE, "out"),
+                    help="parent directory for generated track builds (default: project out)")
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser()
+    ap.add_argument("track_dir")
+    ap.add_argument("--install", default=None,
+                    help='an rF2 ModDev Locations folder, or "auto"')
+    ap.add_argument("--layout", default=None,
+                    help="layout suffix from models_<layout>.ini")
+    add_build_options(ap)
+    args = ap.parse_args(argv)
     # Every step is a process of its own that finds the games through
     # steam_paths, which reads these, so they are set before anything imports it.
     if args.rf2:
@@ -222,7 +227,7 @@ def main():
     track = os.path.basename(os.path.abspath(args.track_dir).rstrip("\\/"))
     if args.layout:
         track = "%s_%s" % (track, args.layout)
-    out = os.path.join(HERE, "out", track)
+    out = os.path.join(os.path.abspath(args.out_root), track)
     py = sys.executable
     lay = ["--layout", args.layout] if args.layout else []
 
@@ -234,7 +239,7 @@ def main():
     print("\nconverting %s" % track)
 
     step(1, "model, surfaces and textures")
-    run([py, "convert_track.py", args.track_dir, "--textures"] + lay)
+    run([py, "convert_track.py", args.track_dir, "--textures", "--out", out] + lay)
 
     step(2, "texture formats")
     run([py, "fix_textures.py", os.path.join(out, "textures"), "--jobs", str(args.jobs)])

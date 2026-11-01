@@ -347,10 +347,14 @@ def main():
             print("  cameras     placeholder (default.cam)")
 
     if args.install:
+        from game_runtime import ensure_stopped
+        import steam_paths
+        ensure_stopped(steam_paths.RF2_DIR)
         dest = os.path.join(args.install, venue)
         import verify_install
         if verify_install.verify(stage, out_dir):
             raise SystemExit("refusing to install: staged location failed verification")
+        ensure_stopped(steam_paths.RF2_DIR)
         try:
             install_location(stage, dest)
         except OSError as exc:

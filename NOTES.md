@@ -1351,3 +1351,91 @@ e5e5c94b8dee7511def0b670bfd5dbb233831c11:
 - https://github.com/gro-ove/actools/blob/e5e5c94b8dee7511def0b670bfd5dbb233831c11/AcTools/AiFile/AiSpline.cs
 - https://github.com/gro-ove/actools/blob/e5e5c94b8dee7511def0b670bfd5dbb233831c11/AcTools/AiFile/AiPointExtra.cs
 - https://github.com/gro-ove/actools/blob/e5e5c94b8dee7511def0b670bfd5dbb233831c11/AcTools/AiFile/AiSplineGrid.cs
+
+## 2026-10-31: repeatable conversion/install/Developer Mode workflow
+
+### Launch measurements before choosing the script's behavior
+
+After the missing-track report, process inspection showed the regular
+Bin64/rFactor2.exe running with +path=".." +workshopsync, and no Mod Mode
+process. ModDev/UserData had no player profile yet. The installed location had
+the expected layout/GDB and matched the staged file inventory.
+
+A Launcher/Launch rFactor.exe +modmode attempt did not leave a running game
+process here. Launching Bin64/rFactor2 Mod Mode.exe directly with the rFactor 2
+root as its working directory and +trace=2 did leave the actual Mod Mode process
+running (PID 35296 in that probe), created ModDev/UserData/player, and produced
+a trace reporting HOT_RELOAD against ModDev. Its AllCarsTracks.cch subsequently
+contained TrackName=ks_laguna_seca and the converted location path. This probe
+occurred BEFORE the user's later instruction to leave final manual testing to
+them; no new game launches were performed after that instruction.
+
+This agrees with Studio 397's documented executable and Start In directory:
+https://docs.studio-397.com/display/DG/Developer%2BMode . A bare executable launch
+is insufficient evidence of entering Developer Mode, so the new launcher checks
+the sustained identity/path of the actual Mod Mode process, excluding CEF
+renderer children. Regular-game redirection, early exit and timeout are failures.
+
+### Commands and lifecycle
+
+The new pure-Python drive_track.py / installed ac2rf2-test command handles
+preflight, sequential track/layout batches, conversion, staged verification,
+installation, and optional Developer Mode launch. It accepts AC track names or
+paths, inline TRACK::LAYOUT, --layout, and --all-layouts. Conversion parameters
+are shared with build_track.py rather than maintained as two option lists.
+--out-root is forwarded all the way into the initial source conversion.
+--install-only uses completed artifacts; --launch-only runs the launch step;
+--no-launch leaves the game stopped for manual testing; --dry-run prints a plan.
+
+By default an existing game/launcher blocks updates. --restart-game requests
+normal window shutdown, and only the additional --force-close permits killing
+remaining detected processes in this installation. Neither Steam itself nor
+other installations are closed. A per-game file lock excludes concurrent test
+workflows from other workspaces. Finalization rechecks that the game is stopped
+before verification and again immediately before replacing the location.
+A failed target prevents launch; previous successful targets in the batch remain
+installed. The existing rollback-on-install-failure behavior is retained.
+
+psutil is declared as a runtime dependency (7.2.2 installed locally), installed
+with the normal activated-venv pip command. The project wheel builds and pip
+check reports no broken requirements. Game binaries remain external and no
+converted assets are committed. docs/TESTING.md documents the options, exact
+working directory, first-time Dev profile setup, and manual selection of a track.
+
+### Regression validation
+
+The initial complete suite passes 128 cases (29 new workflow cases), including
+the real Blender exporter/geometry probes. Workflow tests cover multi-target
+ordering and one final launch, failure preventing later targets/launch, complete
+preflight before shutdown, install-only without source/Blender, dry-run with no
+process/file effects, layout expansion/deduplication/output collisions, argument
+validation, lock exclusion/release, scoped process identification, explicit
+shutdown/force behavior, wrong-game detection, early-exit timeout, and forwarding
+custom output paths into source conversion. Launch tests use simulated processes
+and do not start the user's game.
+
+### Completed real conversion/install run, without launching the game
+
+After the user requested manual testing, the original automatic-launch supervisor
+was stopped and validation was restarted explicitly as:
+
+    ac2rf2-test ks_laguna_seca --jobs 4 --no-launch
+
+The command returned zero after all seven build stages, verification and install.
+It wrote the normal project out/ks_laguna_seca build (no frozen-source path is
+needed for future iterations), exported 1124 GMTs with four Blenders, staged
+275 textures, and installed ModDev/Locations/ks_laguna_seca. Verification found
+zero missing textures; 196 correct alpha-tested GMTs with colour key and suitable
+shaders; 157 upright meshes checked with none incorrectly lit straight up; zero
+1000 m default draw ranges; and 723 shadow casters. AI has 592 waypoints over
+3553.2 m with 24 grid/pit slots; 41 cameras were generated. The preexisting
+RDGRAVEL008 unmatched-surface warning remains.
+
+Post-install comparison found the same inventory/sizes for all 1404 staged and
+installed files, matching scene/database/AI/camera/terrain content hashes, and
+zero running game/launcher processes. A real two-target dry-run also resolved
+ks_laguna_seca and ks_silverstone::gp to the right Steam folders, output names,
+layout argument and Developer Mode destination, without changing processes.
+All 128 regression cases pass after the final CLI checks. The source-format and
+real Blender tests remain included. Launch/restart regression tests simulate
+processes; the user retains the final in-game visual test.

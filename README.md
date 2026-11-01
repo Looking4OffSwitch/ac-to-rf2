@@ -93,9 +93,15 @@ Activate `.venv` in each new terminal. `ac2rf2`, `ac2rf2-check`, and
 `ac2rf2-verify` are installed project commands; `pytest` runs regression tests.
 The existing `python build_track.py` commands continue to work.
 
-The next step is `ac2rf2 "<AC track folder>" --install auto`, adding `--layout`
-where needed. See [validation steps](docs/VALIDATION.md) for the export probes
-and in-game comparison. The larger README reduction remains tracked in
+For repeated conversion, installation, and Developer Mode testing, run:
+
+```bat
+ac2rf2-test ks_laguna_seca --restart-game --jobs 4
+```
+
+See [the testing workflow](docs/TESTING.md) for batch tracks/layouts, install-only,
+launch-only, and dry-run options, and [validation steps](docs/VALIDATION.md) for
+export probes and in-game comparison. The larger README reduction remains tracked in
 [WORK_ITEMS.md](WORK_ITEMS.md).
 
 ---
@@ -166,7 +172,8 @@ Mode) loads. To start it:
 
 - In Steam, press **Play** on rFactor 2 and choose the developer / Mod Mode
   option, or
-- run `rFactor 2\Bin64\rFactor2 Mod Mode.exe`.
+- use `ac2rf2-test --launch-only --restart-game`, which supplies the game root
+  as the working directory and confirms the actual Mod Mode process.
 
 Pick the converted track; it appears under its AC folder name, e.g.
 `ks_silverstone_gp`. It is the same game with the same physics. **Always test a
