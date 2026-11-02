@@ -1609,3 +1609,89 @@ missing pit markers, disconnected branches, invalid indices/counts/coordinates,
 PitPos mismatch and installation rejection of nonempty invalid AIW files.
 Wheel/sdist builds and the isolated distribution checker pass. The regression
 suite does not automate native rFactor 2 gameplay or assert crash resolution.
+
+
+## Skip Barber audio workaround and crash follow-up (2026-11-02)
+
+The latest completed trace is trace_2026_11_01_10_10_51-31.txt (794,491 bytes).
+It loads ks_laguna_seca and ten vehicle slots (player plus nine AI). Unlike the
+09:20 trace, it has no missing-pit-box warning and no grid/pit waypoint reset.
+The four vehicle-audio warnings remain at 54.04-54.18 s. The log ends at 127.40 s
+in AssignPitAndGarage during session restart, with a partial last line. There is
+no new onFatalError line, normal shutdown sequence or newer rFMini.dmp. This
+cannot establish whether the latest process was terminated externally or failed
+without flushing its log. No game was launched to reproduce it.
+
+The existing ModDev/UserData/rFMini.dmp is from the EARLIER 09:22 crash. Its
+exception stream records 0xc0000005, a write to address zero, at executable
+RVA 0x7003cb. Captured memory at the instruction is `mov dword ptr [0], 5`,
+a deliberate null-address write, consistent with the logged onFatalError 11
+termination path. This dump identifies the fatal termination, not its initiating
+cause. It does not establish that the audio warning caused the crash; no such
+claim is made. No newer crash dump or matching Windows Application Error event
+was found during the follow-up.
+
+### Verified sources for the four missing samples
+
+The official MAS2 utility successfully exported the 83 entries of
+ModDev/Vehicles/SkipBarber/SkipBarber_Sounds.mas into ignored
+out/_maintenance/skipbarber-export. The separate Sounds/SkipBarber archive was
+not reopened. Extraction did not change the readable archive's SHA-256:
+c5acfbd69f26fe665cc42e87435e67ef2041056759b16dfae2c595818e802fce.
+The original skipbarber_snd.json is also unchanged:
+d8f704ed1603a44584e654f7a96dda7e702d25ca2f9c346407e76becc41f4d55.
+
+The configuration's external shiftUp/shiftDown events reference the absent
+Caterham_in_shift.wav (two references) and its external starting event references
+Caterham_ext_startup.wav. The same archive provides working Skip Barber shift
+and startup recordings. The absent Skip_TC_in/ext names occur in tractionControl
+loop events; the base game's Secondary directory provides real tc_in/ex samples.
+All four replacement sources are mono, uncompressed 16-bit PCM, with complete
+frame payloads. These are existing game recordings, not generated silence.
+
+| Requested loose filename under vehicle/sounds | Existing source | Bytes | Sample rate | Frames |
+|---|---|---:|---:|---:|
+| Skip_TC_in.wav | ModDev/Sounds/Secondary/tc_in.wav | 179916 | 44100 Hz | 89919 |
+| Caterham_in_shift.wav | extracted skipb_in_shift.wav | 39852 | 44100 Hz | 18025 |
+| Caterham_ext_startup.wav | extracted skipb_ex_startup.wav | 421900 | 48000 Hz | 209471 |
+| Skip_TC_ext.wav | ModDev/Sounds/Secondary/tc_ex.wav | 148242 | 44100 Hz | 74082 |
+
+Studio 397 explicitly supports loose samples relative to the ModDev vehicle
+directory, with 16-bit PCM WAV officially supported:
+https://docs.studio-397.com/display/DG/Using+the+new+sound+engine .
+Four aliases (789910 total bytes) were installed under
+ModDev/Vehicles/SkipBarber/sounds using this documented lookup mechanism.
+This is a local SDK audio workaround using equivalent event recordings, not
+recovery of the unknown original Caterham/Skip_TC assets or an official SDK fix.
+The installed hashes equal their respective source hashes. No JSON, MAS,
+vehicle physics, selected track, graphics or controller settings were changed.
+The four missing referenced paths now resolve on disk; actual game lookup and
+crash behavior remain subject to manual testing.
+
+### Reversible tooling and validation
+
+The generic ac_to_rf2.sound_aliases module accepts a JSON plan containing rf2,
+vehicle, sound_config and target-to-source aliases. Its default mode checks only.
+It checks declared sample references and full 16-bit WAV payloads, refuses existing
+files with different bytes, checks that rFactor is stopped, uses exclusive file
+creation and records ownership and hashes in an external receipt. Failed receipt
+creation rolls back newly created aliases. Undo checks all owned-file hashes
+before removing any and preserves files that existed before installation.
+No track-specific behavior or sound assets are included in the package.
+
+Local plan: out/_maintenance/skipbarber-audio-plan.json.
+Ownership receipt: out/_maintenance/skipbarber-audio-receipt.json.
+Original sound JSON copy: out/_maintenance/skipbarber_snd.original.json.
+Reproduction, source preparation and removal commands are in docs/AUDIO.md.
+The 13 new regressions cover real WAV validation, missing declarations, path
+escapes, conflicts, a running game, rollback, dry-run and ownership-safe removal.
+
+For the next manual test, select Skip Barber on bundled Joesville with ZERO AI,
+then converted Laguna with ZERO AI. Check that the four file warnings disappear
+and that a practice session enters the world. Only then add AI. Preserve the
+resulting trace and any new rFMini.dmp if a failure remains. This separates the
+bundled vehicle's loading from converted AI/path initialization without claiming
+the native crash has already been fixed.
+
+Full local suite: 162 tests pass. Wheel/sdist and isolated module-command checks
+are included in the distribution validation. Native gameplay was not run.

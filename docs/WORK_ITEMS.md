@@ -40,3 +40,11 @@ MAS key in the official MAS utility; this is not proof of corruption. Do not
 replace archives or invent silent samples. Confirm the supported SDK/vehicle
 configuration with Studio 397 if Steam verification/update leaves the mismatch.
 Measured filenames, counts, trace timings and AIW hashes are in docs/NOTES.md.
+
+
+2026-11-02 update: four validated, reversible loose WAV aliases are installed
+for the missing Skip Barber references. Original SDK JSON/MAS hashes are
+unchanged. The generic helper and receipt removal procedure are in docs/AUDIO.md.
+The newer trace has no missing-pit-box/reset warnings, but ends during session
+restart without a new fatal record/dump. Native crash cause and the audio
+workaround's actual game loading remain open pending the zero-AI comparison.

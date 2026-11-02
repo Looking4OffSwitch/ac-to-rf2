@@ -118,3 +118,10 @@ The 2026-11-01 Skip Barber warnings reference four samples absent from the mount
 bundled vehicle archive. This is separate from converted track content. If those
 warnings persist on Joesville, use Steam's installed-file verification and check
 for an SDK update. See measured evidence and remaining manual checks in NOTES.md.
+
+
+A reversible loose-sample workaround for the measured Skip Barber mismatch is
+available: see [SDK audio diagnosis and aliases](AUDIO.md). It uses existing
+game recordings and leaves SDK configuration/archive files unchanged. It is
+separate from track conversion, is never applied automatically by the launcher,
+and does not establish that a native crash is resolved.

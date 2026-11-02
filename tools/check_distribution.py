@@ -28,11 +28,13 @@ def main():
     with zipfile.ZipFile(wheels[0]) as archive:
         names = archive.namelist()
         assert "ac_to_rf2/blender_entry.py" in names
+        assert "ac_to_rf2/sound_aliases.py" in names
         assert not any(n.endswith(".py") and "/" not in n for n in names), "stale flat modules in wheel"
     with tarfile.open(sources[0]) as archive:
         names = [n.partition("/")[2] for n in archive.getnames()]
         for required in ["src/ac_to_rf2/blender_entry.py", "docs/NOTES.md", "tests/test_package_layout.py",
-                         "tools/probes/probe_normals.py", "convert.bat", "launch_dev_mode.bat"]:
+                         "tools/probes/probe_normals.py", "convert.bat", "launch_dev_mode.bat",
+                         "src/ac_to_rf2/sound_aliases.py", "tests/test_sound_aliases.py", "docs/AUDIO.md"]:
             assert required in names, required
         assert not any(n.startswith(("out/", ".tools/", ".venv/")) for n in names)
     with tempfile.TemporaryDirectory(prefix="distribution-", dir=dist.parent) as temporary:
@@ -65,7 +67,8 @@ print(json.dumps({'package': str(PACKAGE_DIR), 'workspace': str(WORKSPACE_DIR)})
         for command in ("ac2rf2", "ac2rf2-test", "ac2rf2-check", "ac2rf2-tools"):
             executable = scripts / (command + (".exe" if os.name == "nt" else ""))
             assert "usage:" in run([executable, "--help"], cwd=work, env=env).lower()
-        assert "usage:" in run([python, "-m", "ac_to_rf2", "--help"], cwd=work, env=env).lower()
+        for module in ("ac_to_rf2", "ac_to_rf2.sound_aliases"):
+            assert "usage:" in run([python, "-m", module, "--help"], cwd=work, env=env).lower()
         run([python, "-m", "pip", "wheel", "--no-deps", "--wheel-dir", work / "rebuilt", sources[0]],
             cwd=work, env=env)
     print("Wheel commands, isolated imports/workspace, and wheel rebuild from sdist passed.")
