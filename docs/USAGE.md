@@ -82,21 +82,19 @@ or source; the converter's geometry API alone already passes a 5.2 smoke test.
 In a Command Prompt opened in this repository:
 
 ```bat
-python -m venv .venv
-.venv\Scripts\activate.bat
-python -m pip install -e ".[dev]"
-ac2rf2-tools
-ac2rf2-check
+run.bat setup
 ```
 
-Activate `.venv` in each new terminal. `ac2rf2`, `ac2rf2-check`, and
-`ac2rf2-verify` are installed project commands; `pytest` runs regression tests.
-Python module invocations use the `ac_to_rf2` namespace; see [development](DEVELOPMENT.md).
+The launcher creates and activates `.venv`, installs Python dependencies, downloads
+the tested portable Blender/exporter and checks setup. No manual activation is needed.
+Use `run.bat convert TRACK` to convert/install or `run.bat drive TRACK` to also play.
+The lower-level `ac2rf2` commands below remain available in an activated `.venv`
+for development and advanced use; see [development](DEVELOPMENT.md).
 
 For repeated conversion, installation, and Developer Mode testing, run:
 
 ```bat
-ac2rf2-test ks_laguna_seca --restart-game --jobs 4
+run.bat drive ks_laguna_seca --restart-game --jobs 4
 ```
 
 See [the testing workflow](TESTING.md) for batch tracks/layouts, install-only,
@@ -171,7 +169,7 @@ Mode) loads. To start it:
 
 - In Steam, press **Play** on rFactor 2 and choose the developer / Mod Mode
   option, or
-- use `ac2rf2-test --launch-only --restart-game`, which supplies the game root
+- use `run.bat game --restart-game`, which supplies the game root
   as the working directory and confirms the actual Mod Mode process.
 
 Pick the converted track; it appears under its AC folder name, e.g.

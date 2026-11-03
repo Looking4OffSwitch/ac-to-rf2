@@ -26,15 +26,31 @@ class Target:
 
 
 def parser():
-    ap = argparse.ArgumentParser(prog="ac2rf2-test", description=__doc__, epilog=(
-        "Examples: ac2rf2-test ks_laguna_seca --restart-game; "
-        "ac2rf2-test ks_silverstone::gp spa; ac2rf2-test --launch-only"))
+    ap = argparse.ArgumentParser(prog="ac2rf2-test", description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter, epilog=(
+        "Choosing tracks:\n"
+        "  Use --list-tracks to print the exact installed track/layout identifiers.\n"
+        "  A track name is its folder name inside Assetto Corsa's content/tracks,\n"
+        "  not its display name in the game. Steam finds that folder automatically.\n"
+        "  Append ::LAYOUT for a listed layout, or pass --layout LAYOUT.\n"
+        "  A full track folder path also works; quote paths containing spaces.\n\n"
+        "Examples:\n"
+        "  %(prog)s --list-tracks\n"
+        "  %(prog)s ks_laguna_seca\n"
+        "  %(prog)s ks_silverstone::gp\n"
+        '  %(prog)s "D:\\AC mods\\my_track"\n'
+        "  %(prog)s --all-tracks\n"
+        "  %(prog)s --all-tracks --dry-run"))
     ap.add_argument("tracks", nargs="*", metavar="TRACK[::LAYOUT]",
-                    help="AC folder path or folder name beneath the AC tracks directory")
+                    help="identifier printed by --list-tracks, or a quoted AC track folder path")
     mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--list-tracks", action="store_true",
+                      help="list exact installed track/layout identifiers without converting or launching")
     mode.add_argument("--install-only", action="store_true", help="reuse completed builds beneath --out-root")
     mode.add_argument("--launch-only", action="store_true", help="launch Developer Mode without converting/installing")
     ap.add_argument("--layout", help="layout for targets without an inline ::LAYOUT")
+    ap.add_argument("--all-tracks", action="store_true",
+                    help="convert every installed AC track and all its declared layouts")
     ap.add_argument("--all-layouts", action="store_true", help="convert every declared layout for each track")
     ap.add_argument("--no-launch", action="store_true", help="convert/install and leave the game stopped")
     ap.add_argument("--restart-game", action="store_true", help="request game/launcher shutdown before updating")
@@ -50,7 +66,14 @@ def parser():
 
 def targets_for(args, ac):
     targets = {}
-    for spec in args.tracks:
+    specs = args.tracks
+    if args.all_tracks or args.list_tracks:
+        directory = ac / "content" / "tracks"
+        specs = [str(folder) for folder in sorted(directory.iterdir(), key=lambda p: p.name.casefold())
+                 if folder.is_dir() and any(folder.glob("*.kn5"))]
+        if not specs:
+            raise ValueError("No AC tracks with .kn5 models found in " + str(directory))
+    for spec in specs:
         parts = spec.split("::")
         if len(parts) > 2 or not parts[0] or (len(parts) == 2 and not parts[1]):
             raise ValueError("Invalid target: " + spec)
@@ -58,7 +81,7 @@ def targets_for(args, ac):
         source = (raw if raw.is_dir() or raw.is_absolute() or len(raw.parts) > 1
                   else ac / "content" / "tracks" / raw).resolve()
         inline = parts[1] if len(parts) == 2 else None
-        if args.all_layouts:
+        if args.all_layouts or args.all_tracks or args.list_tracks:
             if inline or args.layout:
                 raise ValueError("--all-layouts cannot be combined with a specific layout")
             layouts = sorted(p.stem[len("models_"):] for p in source.glob("models_*.ini"))
@@ -149,10 +172,14 @@ def execute(args, rf2, ac, out_root, targets):
 def main(argv=None):
     ap = parser()
     args = ap.parse_args(argv)
-    if args.launch_only and (args.tracks or args.no_launch or args.skip_geometry or args.layout or args.all_layouts):
+    if args.launch_only and (args.tracks or args.no_launch or args.skip_geometry or args.layout or args.all_layouts or args.all_tracks):
         ap.error("--launch-only cannot be combined with track/build options or --no-launch")
-    if not args.launch_only and not args.tracks:
-        ap.error("provide at least one track, or use --launch-only")
+    if args.list_tracks and (args.tracks or args.all_tracks or args.layout or args.all_layouts or args.skip_geometry):
+        ap.error("--list-tracks cannot be combined with track/build selection options")
+    if args.all_tracks and (args.tracks or args.layout):
+        ap.error("--all-tracks cannot be combined with track names or --layout")
+    if not args.launch_only and not args.tracks and not args.all_tracks and not args.list_tracks:
+        ap.error("provide at least one track, use --all-tracks, or use --launch-only")
     if args.force_close and not args.restart_game:
         ap.error("--force-close requires --restart-game")
     if args.no_launch and args.wait_for_exit:
@@ -172,6 +199,11 @@ def main(argv=None):
     out_root = Path(args.out_root).resolve()
     try:
         targets = targets_for(args, ac)
+        if args.list_tracks:
+            print("Available track identifiers in %s:" % (ac / "content/tracks"))
+            for target in targets:
+                print("  " + target.source.name + ("::" + target.layout if target.layout else ""))
+            return 0
         if not (rf2 / "ModDev" / "Locations").is_dir():
             raise ValueError("Developer Mode Locations folder is missing: " + str(rf2))
         if not args.no_launch and not (rf2 / "Bin64" / "rFactor2 Mod Mode.exe").is_file():
@@ -189,6 +221,8 @@ def main(argv=None):
             else:
                 from ac_to_rf2.convert_track import layout_models
                 layout_models(str(target.source), target.layout)
+        if args.all_tracks or args.list_tracks:
+            print("Selected %d track/layout targets from %s" % (len(targets), ac / "content/tracks"), flush=True)
         execute(args, rf2, ac, out_root, targets)
     except (OSError, ValueError, RuntimeError, psutil.Error, subprocess.CalledProcessError) as exc:
         print("ERROR: %s" % exc, file=sys.stderr)

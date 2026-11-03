@@ -115,15 +115,18 @@ def monitor(process, rf2, destination, hung=window_unresponsive,
     return collect(rf2, destination / "exit")
 
 
-def launch_and_monitor(argv):
+def launch_and_monitor(argv, launch_only=True):
     # The root batch activates .venv and delegates the entire workflow here.
     from ac_to_rf2 import drive_track, steam_paths
     args = [a for a in argv if a != "--wait-for-exit"]
-    result = drive_track.main(["--launch-only", "--trace", "5", *args])
-    if result or "--dry-run" in args:
+    workflow = ["--trace", "5", *args]
+    if launch_only:
+        workflow.insert(0, "--launch-only")
+    result = drive_track.main(workflow)
+    if result or "--dry-run" in args or "--no-launch" in args:
         return result
     # Reuse the exact installation resolution used by the launch command.
-    options = drive_track.parser().parse_args(["--launch-only", *args])
+    options = drive_track.parser().parse_args(workflow)
     rf2 = Path(options.rf2 or os.environ.get("AC2RF2_RF2_DIR") or steam_paths.game_dir("rFactor 2")).resolve()
     destination = WORKSPACE_DIR / "out/diagnostics" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     processes = [p for p in game_processes(rf2) if is_developer(p, rf2)]

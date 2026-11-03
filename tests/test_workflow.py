@@ -256,3 +256,58 @@ def test_output_root_is_forwarded_to_source_conversion(tmp_path, monkeypatch):
     with pytest.raises(StopAfterSource):
         build_track.main([str(tmp_path / "source"), "--out-root", str(out)])
     assert commands[0][commands[0].index("--out") + 1] == str(out / "source")
+
+
+def test_all_tracks_discovers_names_and_every_layout_before_launch(environment):
+    _rf2, ac, _out, calls, options = environment
+    source(ac, "z default")
+    multi = source(ac, "a multi", ("gp", "short"))
+    (multi / "models.ini").write_text("[MODEL_0]\nFILE=source.kn5")
+    (ac / "content/tracks/not a track").mkdir()
+    assert workflow.main(options + ["--all-tracks", "--no-launch"]) == 0
+    commands = [c[1] for c in calls if c[0] == "run"]
+    assert [Path(c[3]).name for c in commands] == ["a multi", "a multi", "a multi", "z default"]
+    assert [c[c.index("--layout") + 1] if "--layout" in c else None for c in commands] == [None, "gp", "short", None]
+    assert not any(c[0] == "launch" for c in calls)
+
+
+def test_all_tracks_empty_library_fails_without_touching_game(environment):
+    _rf2, _ac, _out, calls, options = environment
+    assert workflow.main(options + ["--all-tracks"]) == 1
+    assert calls == []
+
+
+def test_all_tracks_dry_run_preflights_without_building_or_launching(environment):
+    _rf2, ac, _out, calls, options = environment
+    source(ac, "one", ("gp",))
+    source(ac, "two")
+    assert workflow.main(options + ["--all-tracks", "--dry-run"]) == 0
+    assert calls == []
+
+
+@pytest.mark.parametrize("args", [["--all-tracks", "one"], ["--all-tracks", "--layout", "gp"],
+                                  ["--all-tracks", "--launch-only"]])
+def test_all_tracks_rejects_conflicting_targets(args):
+    with pytest.raises(SystemExit) as exc:
+        workflow.main(args)
+    assert exc.value.code == 2
+
+
+def test_list_tracks_prints_identifiers_without_requiring_rf2_or_touching_game(environment, capsys):
+    _rf2, ac, _out, calls, options = environment
+    source(ac, "laguna")
+    source(ac, "silverstone", ("gp", "short"))
+    assert workflow.main(options + ["--list-tracks", "--rf2", str(ac / "missing rf2")]) == 0
+    output = capsys.readouterr().out
+    assert "  laguna\n" in output
+    assert "  silverstone::gp\n" in output
+    assert "  silverstone::short\n" in output
+    assert calls == []
+
+
+@pytest.mark.parametrize("args", [["--list-tracks", "track"], ["--list-tracks", "--all-tracks"],
+                                  ["--list-tracks", "--layout", "gp"]])
+def test_list_tracks_rejects_conversion_selection(args):
+    with pytest.raises(SystemExit) as exc:
+        workflow.main(args)
+    assert exc.value.code == 2

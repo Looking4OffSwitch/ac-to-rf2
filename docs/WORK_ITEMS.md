@@ -64,3 +64,28 @@ cockpit with nine AI. See the measured evidence in NOTES.md.
 - Exercise a complete lap, timing, pit entry/exit and AI driving.
 - Investigate the broken fence/wire rendering visible in the successful
   cockpit test against the AC/CSP reference.
+
+
+## AIW branch validation on Silverstone GP and Drift (2026-11-03)
+
+A full launcher-cleanup regression conversion of `ks_silverstone::gp` stops
+in the AIW stage: `branch scoring walk loops forever at waypoint 1084
+(branch 989)`. The original committed converter at `297f5ab` reproduces
+the identical error when its AIW stage reads the same source track. Drift
+also fails at waypoint 218 (branch 149), reproduced with the baseline AIW
+stage against the original source. This
+predates the launcher changes; the failed build was not installed.
+Investigate generic pit/location branch connections against the native
+reference before changing the generator or validator. Measurements and
+local evidence paths are in NOTES.md.
+
+
+## Bound GMT texture-name verification to actual texture fields (2026-11-03)
+
+A full Highlands Drift conversion exports geometry but staged verification
+reports missing Kr.DdS and L.DDs. The old committed verifier reproduces the
+error on the same generated files. Neither matched run ends in NUL; both
+come from the whole-file filename regex, suggesting binary-data false
+positives. Measure native texture-field boundaries and replace arbitrary
+byte scanning while preserving detection of genuinely missing textures.
+Exact GMT filenames/offsets and baseline evidence are in NOTES.md.

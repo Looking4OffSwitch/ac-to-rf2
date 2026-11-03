@@ -1886,3 +1886,113 @@ unresponsive flags also occurred during successfully progressing loading and
 modal waits; automatic snapshots preserve evidence and do not by themselves
 prove a deadlock. Native thread CPU, instruction/data inspection and actual
 live-screen observations were used to distinguish the failures above.
+
+
+## Unified launcher and clean-checkout setup (2026-11-03)
+
+The previous launch_dev_mode.bat checked for activate.bat/python.exe and
+failed when .venv was absent. convert.bat skipped activation whenever any
+VIRTUAL_ENV was defined, including a different project's environment.
+These are the measured code paths preventing a clean checkout from starting
+without manual setup. The renamed root run.bat now delegates stdlib-only
+venv/dependency preparation to tools/bootstrap.py, always activates the
+checkout's environment and dispatches setup/check/convert/drive/game/verify/
+diagnose/test. convert.bat delegates to the same entry point. Existing
+installed commands remain available. Materials and conversion settings
+are unchanged. All edited files retain their worktree line endings; both
+root batch files are CRLF.
+
+A source copy under out/_launcher_validation/clean checkout with spaces
+had no .venv. Running its run.bat --help created the environment, installed
+the editable package/dependencies and returned 0. From an unrelated folder
+with the original checkout's VIRTUAL_ENV active, that copy's check command
+returned 0 in 2.79 seconds, using its own package and leaving the dependency
+stamp unchanged. Appending a comment to that copy's pyproject.toml triggered
+a successful automatic reinstall on the next launch. Root setup validated
+Python 3.14.7, NumPy 2.5.4, both Steam games, Blender 5.0.1 and exporter
+R25.11.27. No manual activation was used for these batch tests.
+
+All 205 pytest tests passed, including real Blender/exporter and external
+dump tests. New regressions cover command routing, default diagnostics,
+failed setup/conversion, reuse/dry-run download avoidance, help, foreign
+virtual environments, outside-directory invocation and batch error codes.
+All eight command help paths returned 0; missing conversion targets and
+unknown commands returned 2. convert.bat --help returned 0 after its pause.
+Setup/check, conversion/drive/game dry runs and offline diagnostic collection
+also passed. The verifier now uses argparse so --help and missing arguments
+behave consistently. Wheel installation, isolated imports/commands, source
+archive contents (including run.bat/bootstrap.py), and wheel rebuilding
+from the source archive passed tools/check_distribution.py. Relative links
+in the edited guides resolve. Command records are in
+out/_launcher_validation/commands.json; generated assets remain ignored.
+
+A full run.bat convert batch used four workers and a fresh output root.
+Laguna exported 1,124 GMTs, installed 275 textures with zero missing, and
+passed staged verification before installation into the real ModDev. A
+separate run.bat verify on the installed location also passed: 196 alpha
+tests correct, 157 upright meshes checked, zero short default draw ranges,
+and 723 shadow casters. The following Silverstone GP target stopped at
+AIW validation after reading 10 models: 966 main waypoints, 5,801.8 metres,
+24 grid/pit positions, pit entry 952 and exit 41. Its validator reports
+branch scoring walk loops forever at waypoint 1084 (branch 989).
+The same AIW stage from the original committed package at 297f5ab, extracted
+into out/_launcher_validation/baseline-source, reproduces that exact error.
+The generator/validator were not changed for launcher cleanup; the failed
+Silverstone build was not installed. This separate defect is recorded in
+WORK_ITEMS.md. Logs are conversions.log and baseline-silverstone.log beneath
+out/_launcher_validation.
+
+Running run.bat with no arguments launched ModDev PID 39976 with trace 5.
+Computer-use observation confirmed the new Laguna build reached a live
+cockpit with ten standings. Desktop input occurred during the check, so
+automated UI input stopped and the running session was left alone. The
+game later exited and the launcher returned 0 after 157.46 seconds.
+out/diagnostics/20261103-093236-308218 contains 135 timeline samples, eight
+native snapshots and final exit evidence (24 preserved input/log files).
+The new trace, trace_2026_11_03_09_32_34-40.txt, loads the installed Laguna
+scene and contains no onFatalError marker. Windows unresponsive flags
+during startup/modal/background activity again triggered captures; these
+flags alone do not prove a deadlock. This is launcher/loading validation,
+not a full-lap, pit-operation or visual-fidelity sign-off.
+
+The follow-up requested explicit track discovery and all-track conversion.
+run.bat convert --list-tracks now prints exact runnable identifiers, with
+::layout suffixes. --help explains that names are AC content/tracks folder
+names and includes list, individual, layout, quoted path and all-track
+examples. --all-tracks selects every detected source and its layouts using
+the same generic enumeration. The installed AC library lists 45 targets;
+the corresponding all-tracks dry run returned 0 and planned 45 builds.
+Regression tests cover selection ordering, default/named layouts, empty
+libraries, conflicting flags and listing without an rF2 installation or
+game/process side effects. The final suite passed 205 tests without warnings.
+
+Additional real conversion tests found pre-existing failures rather than
+launcher regressions. Highlands Drift exported 1,244 GMTs and staged 287
+textures in 322.03 seconds under an isolated test rF2 root, then verification
+rejected references Kr.DdS and L.DDs. The original committed verifier at
+297f5ab reproduces the identical failure on those bytes. The two regex
+matches are at offsets 19,916 in m1n431_House002_lod2_024.gmt and 85,037 in
+m1n985_ruins_HI.gmt; their following bytes are respectively 21 3d ea 06
+and 4b 3d c3 1e, not a terminating NUL. read_gmt currently scans the whole
+file for filename-like byte runs. This suggests false positives outside
+the native fixed-size texture name fields; bounded field parsing needs a
+separate measured fix. No invalid location was installed.
+
+A full --all-tracks test against a temporary AC library containing the real
+Drift source reached the AIW stage in 44.23 seconds, then rejected a branch
+loop at waypoint 218 (branch 149). The baseline package's AIW stage against
+the original Drift source reproduces that exact error, just as it does for
+Silverstone GP. --all-tracks retains the existing fail-stop behavior. These
+pre-existing issues are recorded in WORK_ITEMS.md; no generator/validator
+changes were made here. Logs, build receipts, and baseline comparisons
+remain in ignored out/_launcher_validation.
+
+The drive --install-only --no-launch route also completed a real verified
+Laguna reinstall into a separate test destination (101.10 seconds).
+
+A separate --all-tracks --install-only test used a temporary AC library
+pointing at the real Laguna source and the completed full build. Discovery,
+verification and installation all succeeded into the isolated test rF2 root
+in 87.10 seconds. This tests real all-track dispatch and reuse, rather than
+claiming that the entire installed 45-target library has converted cleanly.
+The known AIW and GMT-verification failures above remain open.

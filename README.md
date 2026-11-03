@@ -1,67 +1,66 @@
 # AC to rF2
 
-Convert Assetto Corsa tracks into rFactor 2 Developer Mode locations: geometry,
-materials, textures, surfaces, AI lines, cameras, lighting, and shadows.
-Custom Shaders Patch settings are read where supported.
+Convert Assetto Corsa tracks for personal use in rFactor 2 Developer Mode.
+Requires Windows 10/11, Steam installations of both games, and
+[Python 3.10+](https://www.python.org/downloads/windows/) with **Add Python to PATH** enabled.
 
-## Requirements
-
-- Windows 10/11, Python 3.10+, and both games installed through Steam.
-- 16 GB RAM recommended.
-- Portable Blender 5.0.1 with the matching community GMT exporter, installed by
-  `ac2rf2-tools`. Your system Blender can remain installed separately.
-
-## Setup
-
-In Command Prompt at the repository root:
+Open Command Prompt in this folder. `run.bat` handles environment setup automatically.
+Run setup, list tracks, then choose an individual or all-track conversion:
 
 ```bat
-python -m venv .venv
-.venv\Scripts\activate.bat
-python -m pip install -e ".[dev]"
-ac2rf2-tools
-ac2rf2-check
+run.bat setup
+run.bat convert --list-tracks
+run.bat convert ks_laguna_seca
+run.bat convert --all-tracks
+run.bat
 ```
 
-Activate `.venv` in each new terminal. Dependencies and project commands are
-installed by pip; Python source code lives in `src/ac_to_rf2`.
+Copy track identifiers from `--list-tracks`; quoted folder paths also work.
+Setup downloads Blender/exporter. Conversions take roughly 5-15 minutes per track.
+Double-click `run.bat` to play; keep its console open for automatic diagnostics.
 
-## Convert and test
+| Command | Action |
+|---|---|
+| `setup` | Install tools; check requirements. |
+| `check` | Check requirements. |
+| `convert TRACK ...` | Convert, verify and install. |
+| `drive TRACK ...` | Convert, install and play. |
+| `game` (or no arguments) | Launch Developer Mode with diagnostics. |
+| `verify "INSTALL" "BUILD"` | Verify a converted installation. |
+| `diagnose` | Save existing game logs. |
+| `test` | Run regression tests. |
 
-```bat
-ac2rf2-test ks_laguna_seca --jobs 4 --no-launch
-```
+Use `run.bat COMMAND --help` for details.
 
-This converts, verifies, and installs the track for manual testing in Developer
-Mode. Omit `--no-launch` to start Developer Mode automatically. Use
-`--restart-game` to close an existing session before updating.
+| Argument | Action |
+|---|---|
+| `--list-tracks` | List exact track/layout identifiers. |
+| `--all-tracks` | Convert every installed track/layout. |
+| `--layout NAME` / `TRACK::NAME` | Select a layout, e.g. `ks_silverstone::gp`. |
+| `--all-layouts` | Convert all layouts of specified tracks. |
+| `--hour HH:MM` | Session time; default noon. |
+| `--jobs N` | Parallel workers; `1` minimizes memory. |
+| `--skip-geometry` | Reuse previous geometry. |
+| `--install-only` | Reinstall completed builds. |
+| `--no-launch` | Leave game stopped after `drive`. |
+| `--restart-game` | Close existing game before proceeding. |
+| `--force-close` | Force shutdown if restart times out. |
+| `--dry-run` | Preview without converting or launching. |
+| `--ac DIR` / `--rf2 DIR` | Override game folders. |
+| `--out-root DIR` | Build storage; default `out`. |
+| `--blender FILE` | Override Blender executable. |
+| `--close-timeout N` / `--launch-timeout N` | Shutdown/startup timeouts in seconds. |
+| `--trace 0..5` | Game logging; default `5`. |
+| `--launch-only` / `--wait-for-exit` | Compatibility options for launching/waiting. |
+| `--bake-size N`, `--grain N`, `--detail-metres N`, `--gain N` | Texture baking controls. |
+| `--diffuse N`, `--ambient N`, `--scene-ambient N` | Material/scene lighting controls. |
+| `diagnose --capture [--pid N]` | Capture running game; optionally select PID. |
+| `diagnose --out DIR` | Diagnostic storage. |
+| `--help` | Show command help. |
 
-```bat
-ac2rf2-test ks_laguna_seca spa ks_silverstone::gp --no-launch
-ac2rf2-test ks_laguna_seca --install-only --no-launch
-ac2rf2-test --launch-only
-```
+A failed track stops the batch. Builds stay in ignored `out/`; installs go into
+rF2's `ModDev/Locations`. `convert.bat` supports dragging a track folder onto it.
+Do not redistribute converted content without its owners' permission.
 
-Builds stay in ignored `out/`; installs go into rFactor 2's `ModDev/Locations`.
-Double-click `launch_dev_mode.bat` in the root to activate `.venv` and start
-Developer Mode with automatic hang diagnostics. No terminal activation or second
-command is needed. Keep its console open while testing. `convert.bat` supports
-drag-and-drop conversion.
-
-## Documentation
-
-- [Workflow options and batch/layout examples](docs/TESTING.md)
-- [Complete usage, requirements, packaging, and limitations](docs/USAGE.md)
-- [Visual and file validation](docs/VALIDATION.md)
-- [Source format compatibility](docs/FORMATS.md)
-- [Development, package layout, and tests](docs/DEVELOPMENT.md)
-- [Measured findings](docs/NOTES.md) and [work items](docs/WORK_ITEMS.md)
-
-## Limitations and content rights
-
-The near-car road band still needs in-game validation; CSP GrassFX and some
-material behavior are approximated. Normal rFactor 2 requires a separate
-packaging step. See the full usage guide for details and protected-track guidance.
-
-Converted tracks contain the source models and textures. Do not redistribute
-converted content unless you have the required rights.
+[Usage](docs/USAGE.md) | [Testing](docs/TESTING.md) | [Development](docs/DEVELOPMENT.md) |
+[Findings](docs/NOTES.md) | [Work items](docs/WORK_ITEMS.md)

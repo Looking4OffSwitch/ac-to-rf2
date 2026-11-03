@@ -10,10 +10,11 @@ tools/              Python distribution-validation automation
 docs/               guides, measured notes, screenshots, and work items
 pyproject.toml      dependencies, packaging, commands, and pytest settings
 convert.bat         retained drag-and-drop launcher (CRLF)
-launch_dev_mode.bat  one-click .venv / Developer Mode launcher (CRLF)
+run.bat             automatic setup and unified command launcher (CRLF)
 ```
 
-Use an activated `.venv` and reinstall after changing entry points or layout:
+For tests, use `run.bat test -q`; it prepares and activates `.venv` automatically.
+For direct development commands, activate `.venv` and reinstall after changing entry points or layout:
 
 ```bat
 python -m pip install -e ".[dev]"
@@ -43,7 +44,7 @@ Former `python build_track.py`, `python drive_track.py`, and similar root-file
 invocations become `ac2rf2`, `ac2rf2-test`, or `python -m ac_to_rf2.<module>`.
 Imports use `ac_to_rf2.<module>`; there are no root-level Python compatibility
 modules that could shadow an installed package. The batch launcher activates
-the local `.venv` when needed and invokes the package module.
+the checkout's local `.venv` on every invocation and invokes the package module.
 
 Blender has its own Python. The build passes the installed package's
 `blender_entry.py` to `--python`; that small entry point adds the package's import

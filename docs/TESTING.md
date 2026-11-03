@@ -1,31 +1,27 @@
 # Convert, install, and drive
 
-Activate the standard virtual environment in Command Prompt, then install the
-project commands (repeat pip installation after pulling command/dependency changes):
-
-```bat
-cd /d D:\dev\ac-to-rf2
-.venv\Scripts\activate.bat
-python -m pip install -e ".[dev]"
-```
+Use `run.bat` from Command Prompt; no environment activation is needed.
+It creates `.venv`, installs dependencies on first use and after metadata changes,
+and always activates this checkout's environment, even if another one is active.
+Run `run.bat setup` to download portable Blender/exporter and check both games.
 
 ## One-click Developer Mode
 
-Double-click `launch_dev_mode.bat` in the repository root. It activates the
-project's `.venv` and runs the existing launch-only workflow. No conversion or
+Double-click `run.bat` in the repository root. It activates the
+project's `.venv` and runs the launch-only workflow with automatic diagnostics. No conversion or
 installation is performed. Startup failures stay visible in the console.
 
 Optional CLI arguments are forwarded, for example:
 
 ```bat
-launch_dev_mode.bat --restart-game
-launch_dev_mode.bat --dry-run
+run.bat --restart-game
+run.bat --dry-run
 ```
 
 ## Normal iteration
 
 ```bat
-ac2rf2-test ks_laguna_seca --restart-game --jobs 4
+run.bat drive ks_laguna_seca --restart-game --jobs 4
 ```
 
 This preflights the targets, closes this installation's game/launcher when
@@ -35,7 +31,7 @@ root as its working directory. It checks that the actual Mod Mode process stays
 running for at least two seconds. A regular-game process or a launch timeout is
 an error. Process confirmation does not prove that the selected track/vehicle loads or renders correctly.
 
-The implementation is `src/ac_to_rf2/drive_track.py`. The equivalent module
+The implementation is `src/ac_to_rf2/drive_track.py`. The lower-level equivalent module
 command is `python -m ac_to_rf2.drive_track ...`; installed commands are unchanged.
 
 Select `ks_laguna_seca` in the game's track list. First-time Developer Mode
@@ -45,15 +41,25 @@ controller settings and does not automatically enter a driving session.
 
 ## Several tracks or layouts
 
+Run `run.bat convert --list-tracks` to print every usable track/layout identifier.
 Track names are resolved under the detected Assetto Corsa `content\tracks`
 folder. Full or relative source-folder paths also work; quote paths with spaces.
 Use `::` for a layout belonging to a particular track:
 
 ```bat
-ac2rf2-test ks_laguna_seca spa ks_silverstone::gp --restart-game
-ac2rf2-test "D:\AC mods\my track" --layout short --restart-game
-ac2rf2-test ks_silverstone --all-layouts --restart-game
+run.bat drive ks_laguna_seca spa ks_silverstone::gp --restart-game
+run.bat drive "D:\AC mods\my track" --layout short --restart-game
+run.bat drive ks_silverstone --all-layouts --restart-game
+run.bat convert --all-tracks
+run.bat convert --all-tracks --dry-run
 ```
+
+`--all-tracks` finds source folders containing KN5 models under the selected
+AC installation's `content/tracks` and selects each default and declared layout.
+Use `--ac <folder>` to select another installation. It cannot be combined with
+individual track arguments or `--layout`. Preview the complete list with
+`run.bat convert --all-tracks --dry-run`. Like explicit batches, it stops on the
+first error and retains earlier successful installs.
 
 Targets run sequentially; each conversion can use several Blender workers.
 Developer Mode launches once after every target succeeds. Identical targets are
@@ -63,11 +69,11 @@ target stops the batch and prevents launch; earlier successful installs remain.
 ## Reuse work or run individual steps
 
 ```bat
-ac2rf2-test ks_laguna_seca --skip-geometry --restart-game
-ac2rf2-test ks_laguna_seca --install-only --restart-game
-ac2rf2-test ks_laguna_seca --no-launch
-ac2rf2-test --launch-only --restart-game
-ac2rf2-test ks_silverstone::gp --dry-run
+run.bat drive ks_laguna_seca --skip-geometry --restart-game
+run.bat drive ks_laguna_seca --install-only --restart-game
+run.bat drive ks_laguna_seca --no-launch
+run.bat game --restart-game
+run.bat drive ks_silverstone::gp --dry-run
 ```
 
 `--skip-geometry` reruns the pipeline except Blender and retains its existing
@@ -85,8 +91,8 @@ checkout, keep generated builds under ignored `out/`.
 | `--force-close` | With restart, kill only this game's detected processes if graceful close times out; unsaved session changes can be lost |
 | `--close-timeout 30` | Time allowed for normal shutdown, in seconds |
 | `--launch-timeout 90` | Time allowed to confirm the actual Mod Mode process |
-| `--trace 2` | Game trace level, 0–5; logs under `ModDev\UserData\Log` |
-| `--wait-for-exit` | Keep the command running until the launched game exits |
+| `--trace 5` | Game trace level, 0–5; logs under `ModDev\UserData\Log` |
+| `--wait-for-exit` | Accepted for compatibility; diagnostics already wait until game exit |
 | `--rf2 <folder>` / `--ac <folder>` | Override Steam game discovery |
 | `--out-root <folder>` | Parent directory for build artifacts |
 | `--hour HH:MM` | Session time (default noon), also applied by install-only |
@@ -96,7 +102,8 @@ Without `--restart-game`, an existing game or launcher stops the workflow before
 conversion or installation. No processes are force-killed implicitly. The script
 locks this game's test workflow to prevent competing scripts from installing or
 launching simultaneously, and rechecks that the game is stopped before install.
-`--dry-run` prints commands without changing files or game processes.
+`--dry-run` prints commands without changing track files or game processes.
+The batch launcher still prepares Python dependencies if setup is needed.
 
 No PowerShell scripts are used. Converted assets stay in ignored output folders.
 For visual checks, follow [VALIDATION.md](VALIDATION.md). Launch working-directory
@@ -130,7 +137,7 @@ and does not establish that a native crash is resolved.
 
 ## Automatic loading-hang diagnostics
 
-Run `.\launch_dev_mode.bat` from the repository root, or double-click it.
+Run `.\run.bat` from the repository root, or double-click it.
 It activates the project's `.venv`, starts Developer Mode with trace level 5,
 and monitors that process automatically. No second command or environment
 activation is needed. Leave the launcher console open while testing.
@@ -148,3 +155,22 @@ The monitor does not terminate/restart the game, modify settings, or claim that
 an unresponsive window identifies the cause. Capture errors are printed in the
 launcher console. Keep diagnostic dumps local for analysis. An explicit
 `--dry-run` only prints the launch command; it starts no game or monitor.
+
+## Conversion without launching
+
+```bat
+run.bat convert ks_laguna_seca --jobs 4
+run.bat convert ks_silverstone::gp spa
+run.bat verify "<rF2>\ModDev\Locations\ks_laguna_seca" out\ks_laguna_seca
+run.bat test -q
+```
+
+`convert` uses the same conversion, verification and install workflow as `drive`,
+with launch disabled. Missing portable Blender/exporter tools are installed before
+full conversions. `--dry-run`, `--install-only` and `--skip-geometry` do not download
+them. `drive` uses the same automatic diagnostics as `game` after launching.
+When dragging one track onto `convert.bat`, available layouts are prompted for
+in an interactive console. All batch files activate the same local environment.
+Relative paths are resolved from the caller's directory, including when the batch
+file is invoked by its full path from another folder. Dependency installation
+requires internet on first use; subsequent launches reuse the environment.

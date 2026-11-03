@@ -1,4 +1,4 @@
-include README.md LICENSE AGENTS.md CLAUDE.md convert.bat launch_dev_mode.bat
+include README.md LICENSE AGENTS.md CLAUDE.md convert.bat run.bat
 recursive-include docs *.md *.jpg
 recursive-include tests *.py
 recursive-include tools *.py

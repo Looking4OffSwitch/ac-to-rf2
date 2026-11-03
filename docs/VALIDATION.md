@@ -2,13 +2,11 @@
 
 ## Prepare the tested tools
 
-In a Command Prompt in the repository, activate `.venv` and run:
+In a Command Prompt in the repository, run:
 
 ```bat
-python -m pip install -e ".[dev]"
-ac2rf2-tools
-ac2rf2-check
-pytest -q
+run.bat setup
+run.bat test -q
 ```
 
 The tooling command installs portable Blender 5.0.1 and the rFactor2 IO Group
@@ -25,8 +23,8 @@ The fixture suite can run without either game or Blender installed.
 ## Convert and inspect a stock track
 
 ```bat
-ac2rf2-test ks_laguna_seca --restart-game --jobs 4
-ac2rf2-verify "C:\Program Files (x86)\Steam\steamapps\common\rFactor 2\ModDev\Locations\ks_laguna_seca" out\ks_laguna_seca
+run.bat drive ks_laguna_seca --restart-game --jobs 4
+run.bat verify "C:\Program Files (x86)\Steam\steamapps\common\rFactor 2\ModDev\Locations\ks_laguna_seca" out\ks_laguna_seca
 ```
 
 The command launches Developer Mode after verification and installation. Select

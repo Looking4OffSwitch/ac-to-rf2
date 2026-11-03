@@ -382,8 +382,13 @@ def verify(installed, out_dir):
     return 0
 
 
-def main():
-    return verify(sys.argv[1], sys.argv[2])
+def main(argv=None):
+    import argparse
+    ap = argparse.ArgumentParser(description="Verify an installed track against its build folder.")
+    ap.add_argument("installed", help="installed ModDev location folder")
+    ap.add_argument("out", help="conversion build folder containing material_map.json")
+    args = ap.parse_args(argv)
+    return verify(args.installed, args.out)
 
 
 if __name__ == "__main__":
