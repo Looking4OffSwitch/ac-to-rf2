@@ -66,7 +66,7 @@ cockpit with nine AI. See the measured evidence in NOTES.md.
   cockpit test against the AC/CSP reference.
 
 
-## AIW branch validation on Silverstone GP and Drift (2026-11-03)
+## Completed: AIW branch validation on Silverstone GP and Drift (2026-11-03)
 
 A full launcher-cleanup regression conversion of `ks_silverstone::gp` stops
 in the AIW stage: `branch scoring walk loops forever at waypoint 1084
@@ -75,17 +75,20 @@ the identical error when its AIW stage reads the same source track. Drift
 also fails at waypoint 218 (branch 149), reproduced with the baseline AIW
 stage against the original source. This
 predates the launcher changes; the failed build was not installed.
-Investigate generic pit/location branch connections against the native
-reference before changing the generator or validator. Measurements and
-local evidence paths are in NOTES.md.
+Resolved by correcting endpoint connections anchored at the final pit-lane
+node to use its existing forward main exit. The loop validator is retained.
+Fresh full Silverstone GP and Drift conversions passed verification and
+installation. Root-cause measurements and results are in NOTES.md.
 
 
-## Bound GMT texture-name verification to actual texture fields (2026-11-03)
+## Completed: bound GMT texture-name verification to actual texture fields (2026-11-03)
 
 A full Highlands Drift conversion exports geometry but staged verification
 reports missing Kr.DdS and L.DDs. The old committed verifier reproduces the
 error on the same generated files. Neither matched run ends in NUL; both
 come from the whole-file filename regex, suggesting binary-data false
-positives. Measure native texture-field boundaries and replace arbitrary
-byte scanning while preserving detection of genuinely missing textures.
-Exact GMT filenames/offsets and baseline evidence are in NOTES.md.
+positives. Resolved by parsing the measured material/texture tables instead
+of scanning geometry bytes. A fresh full Highlands Drift conversion passed
+verification with zero missing textures and installed successfully. Tests
+retain rejection of genuinely missing textures. Exact format measurements
+and validation results are in NOTES.md.

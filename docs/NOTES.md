@@ -1996,3 +1996,49 @@ verification and installation all succeeded into the isolated test rF2 root
 in 87.10 seconds. This tests real all-track dispatch and reuse, rather than
 claiming that the entire installed 45-target library has converted cleanly.
 The known AIW and GMT-verification failures above remain open.
+
+
+## Root causes: terminal pit-location branches and GMT texture scanning (2026-11-03)
+
+Silverstone has 966 main and 24 pit waypoints; branch 989 is the final
+pit node. Drift has 132 main and 18 pit nodes; branch 149 is likewise
+the final pit node. render_aiw attached a pit-box endpoint's C pointer
+back to its nearest lane anchor even when that anchor was the final node.
+Its NEXT enters the reciprocal main loop and never returns to the pit
+node during native scoring. Native Joesville pit endpoints 377/379 use
+forward rejoin pointers 157/159 while their approaches use anchors 154/156.
+The writer now uses the existing main exit for endpoints anchored at the
+terminal pit node. Other anchors, branch chains, positions, waypoint types
+and the scoring validator are retained. A synthetic pair of boxes sharing
+the terminal anchor reproduces the defect and validates the forward join.
+
+Highlands contains Kr.DdS at byte 19916 and L.DDs at 85037 in geometry,
+not texture records. Inspection of the tested R25.11.27 exporter's writer
+confirms GMT word zero holds the material-count offset minus four, each
+material header is 256 bytes plus a texture count, and static textures use
+180-byte records with 64-byte names, flags at +64 and alpha reference at
++100. In House002, the count is at 736002, shader at 736154 and the real
+textures at 736266, 736446 and 736626. The verifier now follows these
+structural boundaries for names, shader/colours, flags and alpha references;
+it never infers texture dependencies from geometry strings. Malformed or
+unsupported animated layouts fail explicitly instead of reverting to byte
+scanning. All 1244 existing Highlands and 1124 Laguna GMTs parsed without
+errors. Regression fixtures now encode the measured real table layout.
+Tests cover embedded filename/slot strings in geometry, actual missing
+textures, multiple materials, truncated records and terminal shared anchors.
+Probe evidence remains local in out/_track_fixes.
+
+Fresh full conversion validation: run.bat convert ks_silverstone::gp drift
+ks_highlands::layout_drift --jobs 4, with a fresh out/_track_fixes/builds
+root and isolated test ModDev destination, completed with exit 0 in 598.48
+seconds. Silverstone exported 1403 GMTs and 210 textures; Drift 248 GMTs
+and 88 textures; Highlands 1244 GMTs and 287 textures. All three passed
+staged verification and installed successfully with zero missing textures.
+Highlands checked 310 alpha tests and 136 upright meshes without failures.
+Its existing duplicate 9.kn5 declaration warning remains deduplicated.
+Silverstone endpoint 1084 now has pointers (1085,1084,41,129), replacing
+its C=989 with exit 41. Drift endpoint 218 now has (219,218,84,122),
+replacing C=149 with exit 84. No waypoint positions were adjusted.
+All 210 tests passed, including real Blender/exporter tests, missing-texture
+rejection and malformed material tables. These are conversion/installation
+checks; no new native driving or visual-fidelity claim is made.

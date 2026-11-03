@@ -12,6 +12,7 @@ import re
 import sys
 import json
 import struct
+from pathlib import Path
 from ac_to_rf2.aiw_contract import validate_aiw
 from ac_to_rf2.terrain import validate_terrain
 from ac_to_rf2.scene_contract import index_meshes, mesh_key, validate_exports
@@ -68,27 +69,54 @@ def material_colours(data, shader_at):
 
 
 def read_gmt(path):
-    b = open(path, "rb").read()
-    out = {"shader": shader_of(b),
-           "textures": set(re.findall(rb"[A-Za-z0-9_\-]+\.(?:dds|tga|png|jpg|bmp)", b, re.I)),
-           "strings": set(x.group().decode()
-                          for x in re.finditer(rb"[ -~]{3,}", b)),
-           "materials": [], "alpha_refs": {}}
-    for m in re.finditer(rb"L2[A-Z0-9]{6,40}", b):
-        s = m.start()
-        if s < 96:
-            continue
-        amb, dif = material_colours(b, s)
-        if 0.0 <= amb <= 1.0 and 0.0 <= dif <= 1.0:
-            out["materials"].append((m.group().decode(), amb, dif))
-    out["tex_flags"] = {}
-    for m in re.finditer(rb"[A-Za-z0-9_\-]+\.(?:dds|tga|png|jpg|bmp)", b, re.I):
-        at = m.start() + ALPHA_REF_OFFSET
-        if at < len(b):
-            out["alpha_refs"][m.group().decode()] = b[at]
-        fl = m.start() + TEX_FLAGS_OFFSET
-        if fl + 4 <= len(b):
-            out["tex_flags"][m.group().decode()] =                 struct.unpack_from("<I", b, fl)[0]
+    """Read the exporter's material table, never filename-like vertex bytes.
+
+    R25 stores the table pointer minus four at offset zero. Each material
+    has a 256-byte header, texture count, then 180-byte static texture records.
+    These boundaries were checked against the exporter and real GMT output.
+    """
+    b = Path(path).read_bytes()
+    def uint(at):
+        if at < 0 or at + 4 > len(b):
+            raise ValueError("truncated GMT material table: " + str(path))
+        return struct.unpack_from("<I", b, at)[0]
+
+    def name(at):
+        if at + 64 > len(b):
+            raise ValueError("truncated GMT name: " + str(path))
+        raw = b[at:at + 64].split(b"\0", 1)[0]
+        return raw.decode("ascii")
+
+    count_at = uint(0) + 4
+    count = uint(count_at)
+    at = count_at + 4
+    if not count or count > (len(b) - at) // 260:
+        raise ValueError("invalid GMT material count: " + str(path))
+    out = dict(shader=None, textures=set(), strings=set(), materials=[], alpha_refs={}, tex_flags={})
+    for _ in range(count):
+        material = name(at)
+        shader = name(at + 148)
+        out["strings"].update((material, shader))
+        if out["shader"] is None:
+            out["shader"] = shader
+        out["materials"].append((shader, *material_colours(b, at + 148)))
+        textures = uint(at + 256)
+        at += 260
+        if textures > (len(b) - at) // 180:
+            raise ValueError("truncated GMT texture table: " + str(path))
+        for _ in range(textures):
+            texture = name(at)
+            out["strings"].add(texture)
+            if texture not in SLOT_NAMES:
+                out["textures"].add(texture.encode("ascii"))
+            out["tex_flags"][texture] = uint(at + TEX_FLAGS_OFFSET)
+            # Converter textures are static; animated records have extra fields.
+            if uint(at + 72) != 1:
+                raise ValueError("unsupported animated GMT texture: " + str(path))
+            out["alpha_refs"][texture] = uint(at + ALPHA_REF_OFFSET)
+            at += 180
+    if at != len(b):
+        raise ValueError("unexpected GMT material table size: " + str(path))
     return out
 
 
@@ -180,7 +208,11 @@ def verify(installed, out_dir):
     for f in os.listdir(gmt_dir):
         if not f.lower().endswith(".gmt"):
             continue
-        g = read_gmt(os.path.join(gmt_dir, f))
+        try:
+            g = read_gmt(os.path.join(gmt_dir, f))
+        except (ValueError, UnicodeError, struct.error) as exc:
+            problems.append("invalid GMT %s: %s" % (f, exc))
+            continue
         for t in g["textures"]:
             if t.decode().lower() not in on_disk_lower:
                 missing.add(t.decode())

@@ -65,3 +65,16 @@ def test_backward_pit_exit_branch_reproduces_native_scoring_infinite_loop():
 def test_missing_pit_lane_stops_generation():
     with pytest.raises(ValueError, match="connected pit lane"):
         render_aiw([], 0, [], [], [], None)
+
+
+def test_pit_boxes_anchored_at_terminal_pit_node_rejoin_main_exit():
+    main = [(0,0,0,6), (20,0,0,6), (20,0,20,6), (0,0,20,6)]
+    lane = [(4,0,1,0), (10,0,1,0), (16,0,1,0)]
+    boxes = [(16,0,3,0), (16,0,4,0)]
+    text = render_aiw(main, 80, [((0,0,0),0,"a")], boxes, boxes,
+                      dict(entry=0, exit=1, lane=lane, boxes=boxes, side=1))
+    assert validate_aiw(text) == []
+    records = [tuple(map(int, m[1].split(","))) for m in re.finditer(r"WP_PTRS=\(([^)]*)\)", text)]
+    for i, ptr in enumerate(records):
+        if ptr[3] >= 106 and ptr[1] == i:
+            assert ptr[2] == 1

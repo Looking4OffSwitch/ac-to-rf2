@@ -22,16 +22,20 @@ def fixture(tmp_path):
                      "render": True, "tris": 1})
         records.append({"mesh": name, "mesh_id": "0:" + name, "material": name,
                         "gmt": name + ".gmt", "part": 0, "parts": 1})
-        b = bytearray(600)
+        b = bytearray(764)
+        struct.pack_into("<II", b, 0, 316, 0)
+        struct.pack_into("<I", b, 320, 1)
         shader = b"L2BUMPSPECMAPT0"
-        b[128:128 + len(shader)] = shader
-        struct.pack_into("<f", b, 48, .5)
-        struct.pack_into("<f", b, 64, .5)
+        b[472:472 + len(shader)] = shader
+        struct.pack_into("<f", b, 392, .5)
+        struct.pack_into("<f", b, 408, .5)
         struct.pack_into("<f", b, 260, 14000.)
         tex = (name + ".dds").encode()
-        b[320:320 + len(tex)] = tex
-        struct.pack_into("<I", b, 384, 0x80)
-        b[420] = 191
+        b[584:584 + len(tex)] = tex
+        struct.pack_into("<I", b, 580, 1)
+        struct.pack_into("<I", b, 656, 1)
+        struct.pack_into("<I", b, 648, 0x80)
+        b[684] = 191
         (gmts / (name + ".gmt")).write_bytes(b)
         dds = bytearray(128)
         dds[:4] = b"DDS "
@@ -107,3 +111,42 @@ def test_verifier_rejects_terrain_missing_global_effects(tmp_path, capsys):
     (installed / "venue.tdf").write_text("[FEEDBACK]\nMaterials=road\n")
     assert verify(installed, out) == 1
     assert "missing [LOOSE] global effects" in capsys.readouterr().out
+
+
+def test_vertex_bytes_are_not_texture_references(tmp_path):
+    from ac_to_rf2.verify_install import read_gmt
+    installed, out = fixture(tmp_path)
+    p = installed / "Assets/GMTs/a.gmt"
+    b = bytearray(p.read_bytes())
+    b[100:112] = b"Kr.DdS\0sBase"
+    p.write_bytes(b)
+    assert read_gmt(p)["textures"] == {b"a.dds"}
+    assert verify(installed, out) == 0
+
+
+def test_real_texture_missing_from_install_is_still_rejected(tmp_path, capsys):
+    installed, out = fixture(tmp_path)
+    (installed / "Assets/MAPs/a.dds").unlink()
+    assert verify(installed, out) == 1
+    assert "textures referenced but not installed" in capsys.readouterr().out
+
+
+def test_truncated_material_table_is_rejected(tmp_path, capsys):
+    installed, out = fixture(tmp_path)
+    p = installed / "Assets/GMTs/a.gmt"
+    p.write_bytes(p.read_bytes()[:-1])
+    assert verify(installed, out) == 1
+    assert "invalid GMT a.gmt" in capsys.readouterr().out
+
+
+def test_multiple_material_records_are_read_by_count(tmp_path):
+    from ac_to_rf2.verify_install import read_gmt
+    installed, _out = fixture(tmp_path)
+    p = installed / "Assets/GMTs/a.gmt"
+    b = bytearray(p.read_bytes())
+    second = bytearray(b[324:])
+    second[260:265] = b"z.dds"
+    b.extend(second)
+    struct.pack_into("<I", b, 320, 2)
+    p.write_bytes(b)
+    assert read_gmt(p)["textures"] == {b"a.dds", b"z.dds"}

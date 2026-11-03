@@ -825,7 +825,11 @@ def render_aiw(wps, length, starts, pit_boxes, pit_garages, pl):
         # Branch chains preserve all locations if several share one anchor.
         onward = branches.get(anchor, -1)
         branches[anchor] = approach
-        locations += [(pos, yaw, kind, in_pits, (approach, endpoint, anchor, kind)),
+        # The final pit node NEXT joins the closed main loop. A C link back
+        # to that terminal node cannot terminate native branch scoring; rejoin
+        # through its existing forward exit instead (including shared anchors).
+        rejoin = pl["exit"] if in_pits and near == m - 1 else anchor
+        locations += [(pos, yaw, kind, in_pits, (approach, endpoint, rejoin, kind)),
                       (tuple((path[near][k] + pos[k]) / 2 for k in range(3)),
                        yaw, kind, in_pits, (anchor, endpoint, onward, kind))]
 
