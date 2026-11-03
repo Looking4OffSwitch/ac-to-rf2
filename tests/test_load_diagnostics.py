@@ -8,6 +8,8 @@ import pytest
 
 from ac_to_rf2.load_diagnostics import collect, summarize_trace, write_dump
 from ac_to_rf2.make_aiw import lap_score
+from ac_to_rf2 import load_diagnostics as diagnostics
+from types import SimpleNamespace
 
 
 def test_pit_scoring_uses_main_lap_distance_not_branch_distance():
@@ -44,6 +46,35 @@ def test_offline_collection_preserves_evidence(tmp_path):
 def test_cannot_write_evidence_into_game(tmp_path):
     with pytest.raises(ValueError, match="outside"):
         collect(tmp_path, tmp_path / "report")
+
+
+def test_monitor_captures_sustained_windows_hang(monkeypatch, tmp_path):
+    now = [0]
+    process = SimpleNamespace(pid=123, create_time=lambda: 10, is_running=lambda: True)
+    calls = []
+    monkeypatch.setattr(diagnostics, "collect", lambda *a, **kw: calls.append((a, kw)))
+    diagnostics.monitor(process, tmp_path, tmp_path / "evidence", hung=lambda pid: True,
+                        clock=lambda: now[0], sleep=lambda secs: now.__setitem__(0, now[0]+secs))
+    assert calls == [((tmp_path, tmp_path / "evidence"), {"pid": 123})]
+
+
+def test_monitor_does_not_dump_transient_unresponsive_window(monkeypatch, tmp_path):
+    now = [0]
+    process = SimpleNamespace(pid=123, create_time=lambda: 10, is_running=lambda: now[0] < 12)
+    calls = []
+    monkeypatch.setattr(diagnostics, "collect", lambda *a, **kw: calls.append(kw))
+    diagnostics.monitor(process, tmp_path, tmp_path / "evidence", hung=lambda pid: now[0] < 3,
+                        clock=lambda: now[0], sleep=lambda secs: now.__setitem__(0, now[0]+secs))
+    assert calls == [{}]  # completed logs only; no dump
+
+
+def test_launch_dry_run_never_starts_monitor(monkeypatch):
+    from ac_to_rf2 import drive_track
+    commands = []
+    monkeypatch.setattr(drive_track, "main", lambda args: commands.append(args) or 0)
+    monkeypatch.setattr(diagnostics, "game_processes", lambda root: pytest.fail("dry run touched game"))
+    assert diagnostics.main(["--launch", "--dry-run"]) == 0
+    assert commands == [["--launch-only", "--trace", "5", "--dry-run"]]
 
 
 @pytest.mark.skipif(os.name != "nt", reason="Windows DbgHelp API")

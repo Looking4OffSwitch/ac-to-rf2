@@ -63,3 +63,7 @@ ac2rf2-verify "<rF2>\ModDev\Locations\<track>" out\<track>
 - Keep the root README concise; detailed documentation belongs in `docs/`.
 
 - Keep each file's existing line endings. `convert.bat` must stay CRLF.
+
+User-facing launch/hang diagnosis must work through the single root
+launch_dev_mode.bat entry point without prior environment activation or a
+second capture command. Keep that workflow integrated.

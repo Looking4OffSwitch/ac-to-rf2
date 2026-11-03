@@ -1756,3 +1756,27 @@ Additional data sanity pass: 196043 numeric fields across material_map.json,
 gmt/exported.json and sectors.json were finite. The staged AIW/SCN/GDB/TDF
 contained no NaN/Infinity numeric literals. This rules out that specific class
 of invalid generated values; it does not identify the hang cause.
+
+
+## Single-launcher automatic diagnostics (2026-11-03)
+
+The bare system-Python module command failed in the user's unactivated root
+PowerShell terminal: that interpreter does not have the editable project
+installed. Requiring another activated terminal was the wrong user workflow.
+The root launch_dev_mode.bat now activates .venv and delegates the complete
+launch-and-monitor workflow to load_diagnostics --launch. Trace level defaults
+to 5 for this workflow. The console remains attached to the monitor; no second
+command is required. There is no additional root diagnostics launcher.
+
+The monitor reads Windows IsHungAppWindow for top-level windows belonging to
+the confirmed ModDev PID. Ten continuous seconds of that OS-reported condition
+triggers two native captures and the existing evidence collector. Recovery
+resets the timer; normal process exit collects completed logs without dumps.
+This threshold controls evidence collection, not a track behavior adjustment or
+assertion about the cause. The monitor does not close/restart the game.
+
+An attempted capture of the earlier reported process found no matching live
+ModDev process, so no live hang dump was obtained. No game was launched during
+this change. The actual root launcher --dry-run passed from an unactivated
+PowerShell shell; regressions verify sustained-hang capture, transient-hang
+recovery and that dry-run never starts monitoring or touches a running game.

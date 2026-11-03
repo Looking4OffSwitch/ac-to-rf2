@@ -8,11 +8,11 @@ if not exist ".venv\Scripts\python.exe" goto :missing_venv
 call ".venv\Scripts\activate.bat"
 if errorlevel 1 goto :activation_failed
 
-python -m ac_to_rf2.drive_track --launch-only %*
+python -m ac_to_rf2.load_diagnostics --launch %*
 set "RESULT=%ERRORLEVEL%"
 if "%RESULT%"=="0" goto :done
 echo.
-echo Developer Mode did not start. Review the error above.
+echo Developer Mode or diagnostics reported an error. Review the message above.
 goto :failed
 
 :missing_venv

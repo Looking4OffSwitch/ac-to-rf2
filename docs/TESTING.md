@@ -127,28 +127,20 @@ separate from track conversion, is never applied automatically by the launcher,
 and does not establish that a native crash is resolved.
 
 
-## Capture a loading hang
+## Automatic loading-hang diagnostics
 
-Run the launcher manually with full trace detail:
+Run `.\launch_dev_mode.bat` from the repository root, or double-click it.
+It activates the project's `.venv`, starts Developer Mode with trace level 5,
+and monitors that process automatically. No second command or environment
+activation is needed. Leave the launcher console open while testing.
 
-```bat
-launch_dev_mode.bat --trace 5
-```
+When Windows reports a game window unresponsive continuously for 10 seconds,
+the monitor captures two native snapshots, thread CPU times, raw logs and
+track inputs under ignored `out/diagnostics/<timestamp>`. It prints that path.
+A transient stall that recovers does not trigger dumps. On normal game exit,
+it preserves logs and track inputs without capturing a live process.
 
-If loading stalls, leave the game open. In a second activated project terminal:
-
-```bat
-python -m ac_to_rf2.load_diagnostics --capture
-```
-
-This attaches to the already running ModDev process; it never starts or closes
-it. Two native snapshots, thread CPU times, logs and track input hashes go to
-ignored `out/diagnostics/<timestamp>`. Keep these files local for analysis.
-The command prints the destination. If permissions prevent process access,
-it prints the Windows error and retains any evidence already collected.
-For an offline report without a game process, omit `--capture`.
-
-Capture a successful built-in-track session the same way for comparison if
-needed. Snapshot capture briefly affects timing; it does not establish a hang
-by itself. A last trace line identifies the last logged event, not necessarily
-the blocked function. Do not close a hung session until collection completes.
+The monitor does not terminate/restart the game, modify settings, or claim that
+an unresponsive window identifies the cause. Capture errors are printed in the
+launcher console. Keep diagnostic dumps local for analysis. An explicit
+`--dry-run` only prints the launch command; it starts no game or monitor.

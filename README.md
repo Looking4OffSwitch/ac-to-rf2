@@ -44,7 +44,9 @@ ac2rf2-test --launch-only
 
 Builds stay in ignored `out/`; installs go into rFactor 2's `ModDev/Locations`.
 Double-click `launch_dev_mode.bat` in the root to activate `.venv` and start
-Developer Mode. `convert.bat` remains available for drag-and-drop conversion.
+Developer Mode with automatic hang diagnostics. No terminal activation or second
+command is needed. Keep its console open while testing. `convert.bat` supports
+drag-and-drop conversion.
 
 ## Documentation
 

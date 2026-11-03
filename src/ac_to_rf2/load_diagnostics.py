@@ -1,8 +1,10 @@
 """Collect offline load evidence or two snapshots of an EXISTING ModDev process.
 
-Never launches, closes, or changes the configuration of the game.
+Direct collection never launches/closes the game. The root launcher uses explicit
+--launch mode to start Developer Mode and automatically monitor it.
 """
 import argparse
+import sys
 import ctypes
 from ctypes import wintypes
 from datetime import datetime, timezone
@@ -51,6 +53,68 @@ def write_dump(pid, destination):
                 raise ctypes.WinError(ctypes.get_last_error())
     finally:
         kernel.CloseHandle(handle)
+
+
+def window_unresponsive(pid):
+    """Read Windows' own hung-window state for this process's top-level windows."""
+    user = ctypes.WinDLL("user32", use_last_error=True)
+    callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    user.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user.IsHungAppWindow.argtypes = [wintypes.HWND]
+    user.IsHungAppWindow.restype = wintypes.BOOL
+    user.EnumWindows.argtypes = [callback_type, wintypes.LPARAM]
+    found = []
+
+    @callback_type
+    def inspect(hwnd, _):
+        owner = wintypes.DWORD()
+        user.GetWindowThreadProcessId(hwnd, ctypes.byref(owner))
+        if owner.value == pid and user.IsHungAppWindow(hwnd):
+            found.append(True)
+        return True
+
+    if not user.EnumWindows(inspect, 0):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return bool(found)
+
+
+def monitor(process, rf2, destination, hung=window_unresponsive,
+            clock=time.monotonic, sleep=time.sleep):
+    created, since = process.create_time(), None
+    print("Automatic diagnostics active. Leave this console open.\n"
+          "Windows-unresponsive state sustained for 10 seconds triggers two native snapshots.\n"
+          "Evidence directory: " + str(destination), flush=True)
+    while process.is_running() and process.create_time() == created:
+        if hung(process.pid):
+            since = clock() if since is None else since
+            if clock() - since >= 10:
+                print("Windows reports the game unresponsive; collecting evidence.", flush=True)
+                return collect(rf2, destination, pid=process.pid)
+        else:
+            since = None
+        sleep(1)
+    print("Game exited; preserving the completed traces.", flush=True)
+    return collect(rf2, destination)
+
+
+def launch_and_monitor(argv):
+    # The root batch activates .venv and delegates the entire workflow here.
+    from ac_to_rf2 import drive_track, steam_paths
+    args = [a for a in argv if a != "--wait-for-exit"]
+    result = drive_track.main(["--launch-only", "--trace", "5", *args])
+    if result or "--dry-run" in args:
+        return result
+    # Reuse the exact installation resolution used by the launch command.
+    options = drive_track.parser().parse_args(["--launch-only", *args])
+    rf2 = Path(options.rf2 or os.environ.get("AC2RF2_RF2_DIR") or steam_paths.game_dir("rFactor 2")).resolve()
+    destination = WORKSPACE_DIR / "out/diagnostics" / datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    processes = [p for p in game_processes(rf2) if is_developer(p, rf2)]
+    if len(processes) != 1:
+        collect(rf2, destination)
+        raise RuntimeError("Game exited before monitoring; traces preserved in " + str(destination))
+    monitor(processes[0], rf2, destination)
+    print("Evidence saved: " + str(destination), flush=True)
+    return 0
 
 
 def collect(rf2, destination, pid=None, interval=3):
@@ -110,6 +174,16 @@ def collect(rf2, destination, pid=None, interval=3):
 
 
 def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    if argv and argv[0] == "--launch":
+        try:
+            return launch_and_monitor(argv[1:])
+        except KeyboardInterrupt:
+            print("Diagnostic monitoring stopped; game was not closed.")
+            return 130
+        except (OSError, ValueError, RuntimeError, psutil.Error) as exc:
+            print("ERROR: " + str(exc))
+            return 1
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--rf2", type=Path)
     ap.add_argument("--out", type=Path)
