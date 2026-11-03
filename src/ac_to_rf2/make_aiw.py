@@ -774,6 +774,28 @@ def build(track_dir, out_path, layout):
     return {"waypoints": n, "length": length, "grid": len(starts), "pits": len(pits)}
 
 
+def lap_score(pos, wps, lap_length):
+    """Project a location onto the main loop; score is distance into the lap.
+
+    wp_score is NOT distance along the pit branch. Native AIWs score pit and
+    location points in the same lap coordinate system as main-path points.
+    """
+    cumulative, best = 0.0, None
+    for i, a in enumerate(wps):
+        b = wps[(i + 1) % len(wps)]
+        dx, dz = b[0] - a[0], b[2] - a[2]
+        squared = dx*dx + dz*dz
+        t = max(0.0, min(1.0, ((pos[0]-a[0])*dx + (pos[2]-a[2])*dz) / squared)) if squared else 0.0
+        distance2 = ((pos[0]-a[0]-t*dx)**2 + (pos[2]-a[2]-t*dz)**2
+                     + (pos[1]-a[1]-t*(b[1]-a[1]))**2)
+        score = cumulative + t * math.sqrt(squared)
+        if best is None or distance2 < best[0]:
+            best = (distance2, score)
+        cumulative += math.sqrt(squared)
+    score = best[1] % lap_length
+    return min(SECTORS-1, int(score / (lap_length / SECTORS))), score
+
+
 def render_aiw(wps, length, starts, pit_boxes, pit_garages, pl):
     if not pl or not pit_boxes:
         raise ValueError("Cannot generate a usable AIW without a connected pit lane and pit boxes")
@@ -923,7 +945,7 @@ def render_aiw(wps, length, starts, pit_boxes, pit_garages, pl):
             a("wp_lockedAlpha=(0)")
             a("wp_test_speed=(-1.000000)")
             a("wp_reverb=(0)")
-            a("wp_score=(0,%.3f)" % (j * 5.0))
+            a("wp_score=(%d,%.3f)" % lap_score((x, y, z), wps, length))
             a("wp_wpse=(0,0)")
             a("wp_branchID=(1)")
             a("wp_bitfields=(0)")
@@ -945,7 +967,7 @@ def render_aiw(wps, length, starts, pit_boxes, pit_garages, pl):
         a("wp_lockedAlpha=(0)")
         a("wp_test_speed=(0.000000)")
         a("wp_reverb=(0)")
-        a("wp_score=(0,0.000)")
+        a("wp_score=(%d,%.3f)" % lap_score(pos, wps, length))
         a("wp_wpse=(0,0)")
         a("wp_branchID=(%d)" % kind)
         a("wp_bitfields=(1)")

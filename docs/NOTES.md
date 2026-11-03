@@ -1695,3 +1695,64 @@ the native crash has already been fixed.
 
 Full local suite: 162 tests pass. Wheel/sdist and isolated module-command checks
 are included in the distribution validation. Native gameplay was not run.
+
+
+## Converted-track hang investigation (2026-11-03)
+
+The user's built-in-track comparison is confirmed by the two new traces.
+07:48 Laguna loads its scene at 80.15 s and stops after Sound::Restart and
+pit assignment, at 105.00 s (HRTF disabled). 07:52 Loch Drummond Short loads
+at 31.11 s, enters the session and exits normally at 179.32 s. BOTH traces
+report fewer than three AI paths before loading their scenes, then add path
+times later. That warning is therefore not sufficient evidence of this hang.
+Neither trace reports the four missing vehicle samples after the alias repair.
+WER records an AppHangB1 report; its archive contains Report.wer, no hang dump.
+No game process remained when this investigation started.
+
+A semantic audit found a separate concrete converter error: pit wp_score fields
+were hardcoded to sector 0 and branch-local distances 0..115 m. All generated
+nonpath location scores were 0 m. Native AIW comments define this field as
+sector and distance INTO THE LAP; native pit points use main-lap coordinates.
+For Laguna, the median absolute difference between the emitted lane score and
+nearest main-point score was 3369.16 m (max 3425.70 m). Loch Drummond Short's
+median was 2.94 m and max 11.43 m. Joesville's median was 3.09 m; its raw maximum
+crosses the lap seam, so raw differences there cannot be interpreted as errors.
+No NEXT-link pit cycles were found in these three files.
+
+The writer now projects pit and nonpath locations onto main-path segments and
+uses the cumulative main-lap distance and corresponding sector. Tests use
+independently calculated positions on a 40 m square (8, 18 and 38 m), rather
+than checking for implementation strings. Main coordinates, source extraction,
+geometry and material values are unchanged. The AIW validator also rejects
+pit NEXT-link cycles or routes that fail to rejoin the main path; general graph
+reachability alone previously could accept those invalid driving routes.
+These are correctness checks, NOT proof of the native hang's cause.
+
+New load_diagnostics tooling preserves up to eight raw traces, selected loading
+markers, all installed AIW/SCN/GDB/TDF inputs and their SHA-256 hashes. Optional
+capture attaches only to an EXISTING ModDev process and takes two external
+DbgHelp snapshots three seconds apart, with thread contexts, CPU times, modules,
+indirectly referenced memory and a memory map. Per-thread CPU/memory counters
+and before/after logs distinguish progress, spinning and waiting. It does not
+launch/close the game or modify the profile. Partial evidence is retained if
+capture fails. Actual Windows MiniDumpWriteDump was tested against a disposable
+Python helper and the resulting threads/modules/memory/thread-info streams
+were validated. No game was launched for that test.
+
+Initial offline evidence is preserved in out/diagnostics/nov03-offline, including
+the failing track inputs before scoring corrections. The definitive cause of
+the hang remains unproven until native thread state can be captured during it.
+The last trace line is not treated as proof of an audio subsystem fault.
+
+
+The regenerated Laguna pit-lane scores span 3311.409..3542.007 m, all in sector 2,
+instead of 0..115 m in sector 0. All 168 local tests pass, including the actual
+external Windows dump capture test. The installation verifier checks the 1124
+GMTs, 275 textures, timing-strip exports, referenced scene meshes, required
+AIW/GDB/TDF files, material contracts, alpha flags, normals and draw distances.
+Those checks do not certify every undocumented native engine requirement.
+
+Additional data sanity pass: 196043 numeric fields across material_map.json,
+gmt/exported.json and sectors.json were finite. The staged AIW/SCN/GDB/TDF
+contained no NaN/Infinity numeric literals. This rules out that specific class
+of invalid generated values; it does not identify the hang cause.

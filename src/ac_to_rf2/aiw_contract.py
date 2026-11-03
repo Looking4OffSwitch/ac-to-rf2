@@ -55,6 +55,19 @@ def validate_aiw(text):
             cur = nxt
         if seen != main:
             raise ValueError("main path contains disconnected loops")
+        # Branch reachability alone can accept a pit NEXT loop: C may still
+        # point to the main track while the actual driving route never exits.
+        for start, record in enumerate(records):
+            if record[1][3] != 1:
+                continue
+            lane_seen, cur = set(), start
+            while records[cur][1][3] == 1:
+                if cur in lane_seen:
+                    raise ValueError("pit lane NEXT links contain a closed cycle")
+                lane_seen.add(cur)
+                cur = records[cur][1][1]
+            if records[cur][1][3] != 0:
+                raise ValueError("pit lane NEXT links do not rejoin the main path")
         reached, pending = set(), [min(main)]
         while pending:
             cur = pending.pop()

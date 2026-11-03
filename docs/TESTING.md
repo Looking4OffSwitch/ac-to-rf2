@@ -125,3 +125,30 @@ available: see [SDK audio diagnosis and aliases](AUDIO.md). It uses existing
 game recordings and leaves SDK configuration/archive files unchanged. It is
 separate from track conversion, is never applied automatically by the launcher,
 and does not establish that a native crash is resolved.
+
+
+## Capture a loading hang
+
+Run the launcher manually with full trace detail:
+
+```bat
+launch_dev_mode.bat --trace 5
+```
+
+If loading stalls, leave the game open. In a second activated project terminal:
+
+```bat
+python -m ac_to_rf2.load_diagnostics --capture
+```
+
+This attaches to the already running ModDev process; it never starts or closes
+it. Two native snapshots, thread CPU times, logs and track input hashes go to
+ignored `out/diagnostics/<timestamp>`. Keep these files local for analysis.
+The command prints the destination. If permissions prevent process access,
+it prints the Windows error and retains any evidence already collected.
+For an offline report without a game process, omit `--capture`.
+
+Capture a successful built-in-track session the same way for comparison if
+needed. Snapshot capture briefly affects timing; it does not establish a hang
+by itself. A last trace line identifies the last logged event, not necessarily
+the blocked function. Do not close a hung session until collection completes.

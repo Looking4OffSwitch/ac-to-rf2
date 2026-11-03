@@ -47,6 +47,13 @@ def test_nonempty_placeholder_is_not_a_valid_aiw():
     assert validate_aiw("fixture")
 
 
+def test_pit_driving_cycle_is_rejected_even_with_other_branch_connections():
+    text = example()
+    blocks = re.split(r"(?im)^wp_pos=", text)
+    blocks[5] = re.sub(r"WP_PTRS=\((\d+),\d+,", r"WP_PTRS=(\1,4,", blocks[5])
+    assert "closed cycle" in ";".join(validate_aiw("wp_pos=".join(blocks)))
+
+
 def test_missing_pit_lane_stops_generation():
     with pytest.raises(ValueError, match="connected pit lane"):
         render_aiw([], 0, [], [], [], None)
