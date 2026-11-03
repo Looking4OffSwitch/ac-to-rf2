@@ -299,3 +299,25 @@ def test_blend_adapter_does_not_assume_enum_indices():
                                                           "Blend_Destination_List": prop}))
     set_blending(m, "blend")
     assert (m.Blend_Source_List, m.Blend_Destination_List) == ("source-id", "inverse-id")
+
+
+def test_terrain_preserves_global_loose_effects_after_unused_surface(tmp_path):
+    template = terrain_template(tmp_path)
+    loose = "[LOOSE]\nReaction=whitesmoke Tex=smokewhite.tga Max=256\nReaction=blacksmoke Tex=smokeblack.tga Max=1024\n"
+    with template.open("a") as stream:
+        stream.write("\n[FEEDBACK]\nMaterials=unused\n" + loose)
+    text, _ = surface_tdf(template, [dict(surface_prefix="ac_road_", surface="ROAD", surface_kind="road")],
+                          {"ROAD": dict(friction=1.0, valid=True)})
+    assert text.index("[TRACKVARS]") < text.index("[FEEDBACK]")
+    assert text.count("[LOOSE]") == 1
+    assert text.endswith(loose)
+    assert "Materials=unused" not in text
+
+
+def test_terrain_global_effect_validation():
+    from ac_to_rf2.terrain import validate_terrain
+    assert "missing [LOOSE]" in validate_terrain("[FEEDBACK]\nMaterials=road")[0]
+    assert "whitesmoke" in validate_terrain("[LOOSE]\n//Reaction=whitesmoke")[0]
+    text = "[LOOSE]\n" + "".join("Reaction=" + name + " Tex=x.tga\n" for name in
+        ("spark", "whitesmoke", "blacksmoke", "flames", "groove", "wallskid"))
+    assert validate_terrain(text) == []

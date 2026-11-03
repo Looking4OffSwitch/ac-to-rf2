@@ -47,6 +47,9 @@ def fixture(tmp_path):
         (r["mesh"], r["gmt"]) for r in records))
     for p in (layout / "venue.gdb", layout / "venue.AIW", installed / "venue.tdf"):
         p.write_text("fixture")
+    (installed / "venue.tdf").write_text("[LOOSE]\n" + "".join(
+        "Reaction=" + name + " Tex=x.tga\n" for name in
+        ("spark", "whitesmoke", "blacksmoke", "flames", "groove", "wallskid")))
     from ac_to_rf2.make_aiw import render_aiw
     boxes = [(4, 0, 1, 0)]
     (layout / "venue.AIW").write_text(render_aiw(
@@ -97,3 +100,10 @@ def test_verifier_rejects_nonempty_broken_aiw(tmp_path, capsys):
     (installed / "venue/venue.AIW").write_text("fixture")
     assert verify(installed, out) == 1
     assert "AIW: number_waypoints" in capsys.readouterr().out
+
+
+def test_verifier_rejects_terrain_missing_global_effects(tmp_path, capsys):
+    installed, out = fixture(tmp_path)
+    (installed / "venue.tdf").write_text("[FEEDBACK]\nMaterials=road\n")
+    assert verify(installed, out) == 1
+    assert "missing [LOOSE] global effects" in capsys.readouterr().out

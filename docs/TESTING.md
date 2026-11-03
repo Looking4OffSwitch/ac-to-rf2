@@ -109,8 +109,9 @@ session. If a warning appears, preserve the latest `ModDev\UserData\Log\trace_*.
 Start with zero AI opponents. Compare the same vehicle on bundled Joesville and
 the converted track to separate vehicle/SDK warnings from track defects.
 
-The converter now rejects AIW files with missing pit types, disconnected locations
-or invalid waypoint links before installation. Existing builds made before this
+The converter rejects AIW files with missing pit types, disconnected locations,
+invalid waypoint links or nonterminating native branch walks before installation.
+It also rejects terrain files missing the native global effects in `[LOOSE]`. Existing builds made before this
 check need AIW regeneration; `--install-only` reuses their AIW and will reject an
 invalid old one. A full conversion regenerates it automatically.
 
@@ -137,8 +138,11 @@ activation is needed. Leave the launcher console open while testing.
 When Windows reports a game window unresponsive continuously for 10 seconds,
 the monitor captures two native snapshots, thread CPU times, raw logs and
 track inputs under ignored `out/diagnostics/<timestamp>`. It prints that path.
-A transient stall that recovers does not trigger dumps. On normal game exit,
-it preserves logs and track inputs without capturing a live process.
+A transient stall that recovers does not trigger dumps. Monitoring continues
+after every capture until the game exits or is killed. Sustained hangs can
+produce another pair every 30 seconds in separate hang folders. A one-second
+timeline records CPU, memory and Windows responsiveness. On process exit,
+final logs and track inputs are preserved in the exit folder.
 
 The monitor does not terminate/restart the game, modify settings, or claim that
 an unresponsive window identifies the cause. Capture errors are printed in the

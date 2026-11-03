@@ -48,19 +48,29 @@ def test_cannot_write_evidence_into_game(tmp_path):
         collect(tmp_path, tmp_path / "report")
 
 
-def test_monitor_captures_sustained_windows_hang(monkeypatch, tmp_path):
+@pytest.mark.parametrize("fail_first", [False, True])
+def test_monitor_captures_sustained_windows_hang(monkeypatch, tmp_path, fail_first):
     now = [0]
-    process = SimpleNamespace(pid=123, create_time=lambda: 10, is_running=lambda: True)
+    process = SimpleNamespace(pid=123, cpu_times=lambda: SimpleNamespace(_asdict=lambda: {}),
+                              memory_info=lambda: SimpleNamespace(_asdict=lambda: {}),
+                              create_time=lambda: 10, is_running=lambda: now[0] < 45)
     calls = []
-    monkeypatch.setattr(diagnostics, "collect", lambda *a, **kw: calls.append((a, kw)))
+    def capture(*args, **kwargs):
+        calls.append((args, kwargs))
+        if fail_first and len(calls) == 1:
+            raise OSError("simulated capture failure")
+    monkeypatch.setattr(diagnostics, "collect", capture)
     diagnostics.monitor(process, tmp_path, tmp_path / "evidence", hung=lambda pid: True,
                         clock=lambda: now[0], sleep=lambda secs: now.__setitem__(0, now[0]+secs))
-    assert calls == [((tmp_path, tmp_path / "evidence"), {"pid": 123})]
+    assert [kw for _a, kw in calls] == [{"pid": 123}, {"pid": 123}, {}]
+    assert calls[-1][0][1].name == "exit"
 
 
 def test_monitor_does_not_dump_transient_unresponsive_window(monkeypatch, tmp_path):
     now = [0]
-    process = SimpleNamespace(pid=123, create_time=lambda: 10, is_running=lambda: now[0] < 12)
+    process = SimpleNamespace(pid=123, cpu_times=lambda: SimpleNamespace(_asdict=lambda: {}),
+                              memory_info=lambda: SimpleNamespace(_asdict=lambda: {}),
+                              create_time=lambda: 10, is_running=lambda: now[0] < 12)
     calls = []
     monkeypatch.setattr(diagnostics, "collect", lambda *a, **kw: calls.append(kw))
     diagnostics.monitor(process, tmp_path, tmp_path / "evidence", hung=lambda pid: now[0] < 3,

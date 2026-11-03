@@ -807,7 +807,7 @@ def render_aiw(wps, length, starts, pit_boxes, pit_garages, pl):
     if n < 3 or m < 2 or pl["entry"] == pl["exit"]:
         raise ValueError("AIW needs a main loop and a pit lane with distinct entry/exit")
     total_wp = n + m + 2 * (len(starts) + len(pit_boxes))
-    branches = {pl["entry"]: n, pl["exit"]: n + m - 1}
+    branches = {pl["entry"]: n}
     locations = []
     # Native Joesville/Loch Drummond encode grid types at 2+i and pit types
     # at 106+i, in BOTH branchID and WP_PTRS' fourth field. Each location

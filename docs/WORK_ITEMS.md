@@ -48,3 +48,19 @@ unchanged. The generic helper and receipt removal procedure are in docs/AUDIO.md
 The newer trace has no missing-pit-box/reset warnings, but ends during session
 restart without a new fatal record/dump. Native crash cause and the audio
 workaround's actual game loading remain open pending the zero-AI comparison.
+
+
+## Loading failures resolved; follow-up native driving validation (2026-11-03)
+
+The manual-isolation item above is superseded for the reproduced loading
+failures: computer-use testing established Joesville as a working control,
+proved the AIW backward-branch loop, then identified the discarded TDF LOOSE
+effects. With both generic fixes, Laguna loads into live practice and the
+cockpit with nine AI. See the measured evidence in NOTES.md.
+
+- Correct the grid-based garage spawn that immediately triggers an Exiting
+  Pits Under Red penalty. Validate proper pit/garage geometry and connections
+  before changing spawn positions.
+- Exercise a complete lap, timing, pit entry/exit and AI driving.
+- Investigate the broken fence/wire rendering visible in the successful
+  cockpit test against the AC/CSP reference.

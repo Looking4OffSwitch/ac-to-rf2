@@ -54,6 +54,14 @@ def test_pit_driving_cycle_is_rejected_even_with_other_branch_connections():
     assert "closed cycle" in ";".join(validate_aiw("wp_pos=".join(blocks)))
 
 
+def test_backward_pit_exit_branch_reproduces_native_scoring_infinite_loop():
+    # Main exit 1 branches back to pit end 6, whose NEXT is main exit 1.
+    # All pointers are in range and all nodes remain graph-reachable, yet
+    # the native scoring walk from 6.NEXT can never return to 6.
+    text = example().replace("WP_PTRS=(0,2,-1,0)", "WP_PTRS=(0,2,6,0)")
+    assert "branch scoring walk loops forever" in ";".join(validate_aiw(text))
+
+
 def test_missing_pit_lane_stops_generation():
     with pytest.raises(ValueError, match="connected pit lane"):
         render_aiw([], 0, [], [], [], None)

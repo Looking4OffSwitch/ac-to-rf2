@@ -80,21 +80,39 @@ def window_unresponsive(pid):
 
 def monitor(process, rf2, destination, hung=window_unresponsive,
             clock=time.monotonic, sleep=time.sleep):
-    created, since = process.create_time(), None
-    print("Automatic diagnostics active. Leave this console open.\n"
-          "Windows-unresponsive state sustained for 10 seconds triggers two native snapshots.\n"
+    destination = Path(destination)
+    destination.mkdir(parents=True, exist_ok=False)
+    created, since, next_capture, number = process.create_time(), None, 0, 0
+    print("Automatic diagnostics active until the game exits.\n"
           "Evidence directory: " + str(destination), flush=True)
-    while process.is_running() and process.create_time() == created:
-        if hung(process.pid):
-            since = clock() if since is None else since
-            if clock() - since >= 10:
-                print("Windows reports the game unresponsive; collecting evidence.", flush=True)
-                return collect(rf2, destination, pid=process.pid)
-        else:
-            since = None
-        sleep(1)
-    print("Game exited; preserving the completed traces.", flush=True)
-    return collect(rf2, destination)
+    with (destination / "timeline.jsonl").open("w", encoding="utf-8", buffering=1) as timeline:
+        while True:
+            try:
+                if not process.is_running() or process.create_time() != created:
+                    break
+                unresponsive = hung(process.pid)
+                timeline.write(json.dumps(dict(utc=datetime.now(timezone.utc).isoformat(),
+                    unresponsive=unresponsive, cpu=process.cpu_times()._asdict(),
+                    memory=process.memory_info()._asdict())) + "\n")
+                if unresponsive:
+                    since = clock() if since is None else since
+                    if clock() - since >= 10 and clock() >= next_capture:
+                        number += 1
+                        target = destination / ("hang-%04d" % number)
+                        print("Capturing unresponsive state: " + str(target), flush=True)
+                        try:
+                            collect(rf2, target, pid=process.pid)
+                        except (OSError, ValueError, RuntimeError, psutil.Error) as exc:
+                            timeline.write(json.dumps(dict(capture_error=str(exc))) + "\n")
+                            print("Capture error; monitoring continues: " + str(exc), flush=True)
+                        next_capture = clock() + 30
+                else:
+                    since, next_capture = None, 0
+                sleep(1)
+            except psutil.NoSuchProcess:
+                break
+    print("Game exited; preserving final logs.", flush=True)
+    return collect(rf2, destination / "exit")
 
 
 def launch_and_monitor(argv):

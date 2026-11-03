@@ -68,6 +68,23 @@ def validate_aiw(text):
                 cur = records[cur][1][1]
             if records[cur][1][3] != 0:
                 raise ValueError("pit lane NEXT links do not rejoin the main path")
+        # Native branch scoring starts at branch.NEXT and walks reciprocal
+        # NEXT/PREV edges until returning to the branch or a nonreciprocal
+        # join. A back-branch from a main pit exit into the last pit point
+        # instead enters the closed main loop and can never terminate.
+        for origin, record in enumerate(records):
+            branch = record[1][2]
+            if branch < 0:
+                continue
+            cur, visited = records[branch][1][1], set()
+            while True:
+                nxt = records[cur][1][1]
+                if cur == branch or records[nxt][1][0] != cur:
+                    break
+                if cur in visited:
+                    raise ValueError("branch scoring walk loops forever at waypoint %d (branch %d)" % (origin, branch))
+                visited.add(cur)
+                cur = nxt
         reached, pending = set(), [min(main)]
         while pending:
             cur = pending.pop()

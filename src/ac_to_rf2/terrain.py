@@ -5,14 +5,19 @@ from pathlib import Path
 
 def surface_tdf(template, rows, surfaces):
     text = Path(template).read_text(encoding="utf-8", errors="replace")
-    chunks = re.split(r"(?m)^(?=\[FEEDBACK\])", text)
+    # Split every section: LOOSE is independent of the final material block.
+    chunks = re.split(r"(?m)^(?=\[[^]\r\n]+\])", text)
     native = {}
     for chunk in chunks[1:]:
+        if not chunk.startswith("[FEEDBACK]"):
+            continue
         match = re.search(r"(?m)^Materials=(.+)$", chunk)
         if match:
             for name in match.group(1).split(","):
                 native.setdefault(name.strip().lower(), chunk)
-    out, applied, seen = [chunks[0]], {}, {}
+    first_feedback = next((i for i, chunk in enumerate(chunks)
+                           if chunk.startswith("[FEEDBACK]")), len(chunks))
+    out, applied, seen = chunks[:first_feedback], {}, {}
     for row in rows:
         prefix, key = row["surface_prefix"], row["surface"]
         if prefix in seen:
@@ -39,4 +44,16 @@ def surface_tdf(template, rows, surfaces):
         block = re.sub(r"(?m)^Materials=.+$", "Materials=" + prefix, block)
         out.append("\n// AC surface %s\n%s" % (key, block))
         applied[prefix] = dry
+    # Native global effects are required even when no surface uses them.
+    out.extend(chunk for chunk in chunks[first_feedback:] if not chunk.startswith("[FEEDBACK]"))
     return "".join(out), applied
+
+
+def validate_terrain(text):
+    """Reject the missing native global effects that crash session startup."""
+    match = re.search(r"(?ims)^\[LOOSE\]\s*\n(.*?)(?=^\[|\Z)", text)
+    if not match:
+        return ["TDF: missing [LOOSE] global effects"]
+    reactions = set(re.findall(r"(?im)^\s*Reaction=(\w+)", match[1]))
+    missing = {"spark", "whitesmoke", "blacksmoke", "flames", "groove", "wallskid"} - reactions
+    return ["TDF: missing global effects: " + ", ".join(sorted(missing))] if missing else []

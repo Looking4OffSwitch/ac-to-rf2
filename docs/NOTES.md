@@ -1780,3 +1780,109 @@ ModDev process, so no live hang dump was obtained. No game was launched during
 this change. The actual root launcher --dry-run passed from an unactivated
 PowerShell shell; regressions verify sustained-hang capture, transient-hang
 recovery and that dry-run never starts monitoring or touches a running game.
+
+
+## Native reproduction: backward pit-exit branch causes an infinite walk (2026-11-03)
+
+Using the computer-use skill, the agent launched launch_dev_mode.bat, selected
+Joesville Runabout with the existing Skip Barber and nine AI, and reached its
+live practice/garage screen. The bundled Joesville references a missing
+FANS_STADIUM_bad.wav ambient sample; acknowledging that warning allowed loading
+to finish. Working logs and two native snapshots are saved under
+out/diagnostics/reference-joesville-loaded. This establishes a working control
+with the same car and opponent count, rather than inferring success from a PID.
+
+Selecting converted Laguna in the same process reproduced the stuck load screen.
+Continuous capture saved repeated snapshots under
+out/diagnostics/20261103-083226-152720. In hang-0006, main thread 36140 used
+3.0625 CPU seconds between snapshots approximately three seconds apart. Its
+instruction pointer was at executable RVA 0x5ae0b3. The captured instruction
+sequence follows node NEXT at offset 0xf8 while checking reciprocal PREV at
+0xf0, stopping on its original branch node or a nonreciprocal join.
+
+Read-only inspection of the live process confirmed the outer waypoint index
+was 590 and its branch target (RBX) was waypoint 615, position
+(280.0471,-11.7327,-232.6277). Waypoint 590's C pointer targeted 615; 615's NEXT
+targeted 590. The traversal starts at branch.NEXT, hence on the main loop.
+Every main NEXT/PREV pair is reciprocal, and that closed loop never reaches
+pit waypoint 615. This is the observed busy loop, not a conjecture based on the
+last sound log line. No game memory or executable instructions were modified.
+
+The bundled Joesville pit end 226 points NEXT to main 72, whose C points to a
+grid location (312), not back to 226. Loch Drummond Short pit end 623 points
+NEXT to main 87, whose C is -1. The converter had deliberately added the
+backward main-exit C link in addition to the required forward pit NEXT join.
+That backward link is removed; the pit's forward NEXT join is retained.
+
+A generic validator now simulates this native reciprocal branch walk for every
+branch pointer and rejects a cycle that cannot reach its branch target or a
+nonreciprocal join. All three bundled native AIWs pass. The preserved failing
+Laguna AIW fails specifically at waypoint 590, branch 615. A small synthetic
+regression reproduces this condition despite valid indices and graph reachability.
+The source fix is generic, with no track-name special case or numerical tuning.
+
+The monitor's early-return defect is also corrected. After a capture it continues
+sampling until process exit/termination, records a line-buffered timeline, and
+can capture additional sustained unresponsive states at 30-second intervals in
+separate folders. Final logs go into an exit folder. Recovery resets detection;
+capture failures are logged without intentionally ending monitoring. During this
+reproduction it survived startup, reference loading, leaving the reference,
+Laguna loading, repeated captures and the authorized kill of the hung process.
+
+
+## Second native failure: dropped global terrain effects (2026-11-03)
+
+After regenerating/installing the corrected AIW, the before/after AIW diff was
+exactly one line: WP_PTRS=(589,591,615,0) became (589,591,-1,0). The next
+normal run (trace_2026_11_03_08_42_35-78.txt) passed the former loop, reached
+Entering DYN at 89.60s, then onFatalError 11 at 89.96s. This exposed a second
+failure rather than establishing a complete repair.
+
+The native minidump contains the original exception context on the main stack
+at 0x97bdb7c500, underneath the intentional null write in the fatal handler.
+Its original RIP is executable RVA 0x78ba3f with RAX=0. Read-only live code
+inspection in a subsequent normal process shows the instruction is
+cmp byte ptr [rax+0x80],0, following a load of the global effects pointer at
+RVA 0x1da12e8. Its initializer assigns that pointer from effect type 2.
+The generic fatal-handler address/export name is therefore not the origin.
+No executable or live data was patched. Debugger-attached trials were kept
+separate from the normal before/after validation.
+
+The installed generated TDF had zero [LOOSE] sections and none of the six
+active global reactions in the native template: spark, whitesmoke, blacksmoke,
+flames, groove, wallskid. surface_tdf split only at [FEEDBACK], absorbing
+[LOOSE] into the final safer-material block. Laguna uses no safer material,
+so the entire trailing section was omitted. If that material were used, the
+section could instead be duplicated. Section boundaries now include every
+native section; TRACKVARS stays before the feedback blocks and global sections
+are copied exactly once, independently of selected material prefixes.
+
+The repaired installed TDF differs from the failing file only by whitespace
+and the restored [LOOSE] tail: all pre-LOOSE content is identical after
+whitespace removal. Geometry, textures, SCN, GDB, car and nine-AI setting
+were retained. Normal launch via launch_dev_mode.bat (PID 16756, trace
+trace_2026_11_03_08_57_35-90.txt) reached Entering DYN at 84.15s and then
+the live practice screen with ten standings. Clicking Race entered the live
+cockpit. There was no warning dialog or fatal crash. Working snapshots and
+inputs are saved in out/diagnostics/laguna-loaded-after-fixes. The process
+was closed normally with Alt+F4; the root batch remained attached through
+exit and saved final evidence in out/diagnostics/20261103-085736-530745/exit.
+
+Regression tests cover dropping the final unused material while retaining
+global effects once, TRACKVARS ordering, commented-out reactions, and rejection
+of old TDFs missing required globals by the installed/staged verifier. A
+capture-failure regression also proves monitoring continues to the next capture
+and final exit collection. Converted content and native evidence remain local.
+
+Scope of successful native validation: loading, live practice and cockpit
+entry with nine AI. A full lap, pit operation and visual fidelity are not
+validated. The existing grid-based garage spawn still produces an immediate
+Exiting Pits Under Red penalty; the screenshots also show broken fence/wire
+rendering. Those are separate remaining defects, not evidence of another
+loading hang.
+
+Validation after the final source changes: 176 pytest tests passed. Windows
+unresponsive flags also occurred during successfully progressing loading and
+modal waits; automatic snapshots preserve evidence and do not by themselves
+prove a deadlock. Native thread CPU, instruction/data inspection and actual
+live-screen observations were used to distinguish the failures above.
